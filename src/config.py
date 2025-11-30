@@ -50,6 +50,7 @@ class LanguagesConfig(BaseModel):
     original: str = "zh_cn"
     source: str = "en"
     target: str = "ru"
+    patch_lang: str = "de"  # Language to patch (replace with translations)
     context_languages: list[str] = Field(default_factory=list)
 
     @cached_property

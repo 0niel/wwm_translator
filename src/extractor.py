@@ -20,76 +20,49 @@ BytesReader = Generator[bytes, None, None]
 
 
 class Extractor(Protocol):
-    """Protocol for extractors."""
-
-    def extract(self, input_path: Path, output_path: Path) -> ExtractionResult:
-        """Extract data from input to output."""
-        ...
+    def extract(self, input_path: Path, output_path: Path) -> ExtractionResult: ...
 
 
-ARCHIVE_MAGIC = b"\xef\xbe\xad\xde"
+ARCHIVE_MAGIC = b"\xef\xbe\xad\xde"  # 0xDEADBEEF
 TEXT_MAGIC = b"\xdc\x96\x58\x59"
 
 
 @dataclass(slots=True, frozen=True)
 class ArchiveHeader:
-    """Archive file header."""
-
+    """Archive header: Magic(4) + Version(4) + BlockCount(4)."""
     version: int = 1
     offset_count: int = 0
 
     @classmethod
     def read(cls, data: bytes) -> Self | None:
-        """Read header from bytes."""
-        if len(data) < 12:
+        if len(data) < 12 or data[:4] != ARCHIVE_MAGIC:
             return None
-        if data[:4] != ARCHIVE_MAGIC:
-            return None
-
         version = struct.unpack("<I", data[4:8])[0]
         offset_count = struct.unpack("<I", data[8:12])[0] + 1
-
         return cls(version=version, offset_count=offset_count)
 
 
 @dataclass(slots=True)
 class BlockHeader:
-    """Compressed block header."""
-
+    """Compressed block header: Type(1) + CompSize(4) + DecompSize(4)."""
     compression_type: int
     compressed_size: int
     decompressed_size: int
 
     @classmethod
     def read(cls, data: bytes) -> Self | None:
-        """Read block header from bytes."""
         if len(data) < 9:
             return None
-
         comp_type, comp_size, decomp_size = struct.unpack("<BII", data[:9])
-        return cls(
-            compression_type=comp_type,
-            compressed_size=comp_size,
-            decompressed_size=decomp_size,
-        )
+        return cls(compression_type=comp_type, compressed_size=comp_size, decompressed_size=decomp_size)
 
     @property
     def is_zstd(self) -> bool:
-        """Check if ZSTD compressed."""
         return self.compression_type == 0x04
 
 
 class BinaryExtractor:
-    """
-    Game archive extractor.
-
-    Archive format:
-    - Magic: 0xDEADBEEF (4 bytes)
-    - Version: 4 bytes
-    - Block count: 4 bytes
-    - Offsets: N * 4 bytes
-    - Compressed blocks: ZSTD data
-    """
+    """Game archive extractor (ZSTD compressed blocks)."""
 
     __slots__ = ("_log",)
 
@@ -97,7 +70,6 @@ class BinaryExtractor:
         self._log = log_callback or logger.info
 
     def extract(self, input_file: Path, output_dir: Path) -> ExtractionResult:
-        """Extract binary archive to .dat files."""
         errors: list[str] = []
         files_count = 0
 
@@ -115,21 +87,15 @@ class BinaryExtractor:
                 if header.offset_count == 1:
                     files_count = self._extract_single(f, output_dir, base_name)
                 else:
-                    files_count, errors = self._extract_multiple(
-                        f, output_dir, base_name, header.offset_count
-                    )
+                    files_count, errors = self._extract_multiple(f, output_dir, base_name, header.offset_count)
 
-            return ExtractionResult.ok(
-                f"Extracted {files_count} files",
-                files=files_count,
-            )
+            return ExtractionResult.ok(f"Extracted {files_count} files", files=files_count)
 
         except Exception as e:
             logger.exception("Archive extraction failed")
             return ExtractionResult.fail(str(e), errors)
 
     def _extract_single(self, f, output_dir: Path, base_name: str) -> int:
-        """Extract single block archive."""
         comp_block_len = struct.unpack("<I", f.read(4))[0]
         comp_block = f.read(comp_block_len)
 
@@ -144,10 +110,7 @@ class BinaryExtractor:
         self._log(f"Extracted: {output_path.name}")
         return 1
 
-    def _extract_multiple(
-        self, f, output_dir: Path, base_name: str, offset_count: int
-    ) -> tuple[int, list[str]]:
-        """Extract multiple block archive."""
+    def _extract_multiple(self, f, output_dir: Path, base_name: str, offset_count: int) -> tuple[int, list[str]]:
         errors: list[str] = []
         count = 0
 
@@ -175,15 +138,12 @@ class BinaryExtractor:
         return count, errors
 
     def pack(self, input_dir: Path, output_file: Path) -> ExtractionResult:
-        """Pack .dat files into binary archive."""
         import re
 
         try:
             dat_files = sorted(
                 input_dir.glob("*.dat"),
-                key=lambda x: int(m.group(1))
-                if (m := re.search(r"(\d+)\.dat$", x.name))
-                else float("inf"),
+                key=lambda x: int(m.group(1)) if (m := re.search(r"(\d+)\.dat$", x.name)) else float("inf"),
             )
 
             if not dat_files:
@@ -219,17 +179,7 @@ class BinaryExtractor:
 
 
 class TextExtractor:
-    """
-    Text extractor from .dat files.
-
-    Text .dat format:
-    - Count full: 4 bytes
-    - Padding: 4 bytes
-    - Count text: 4 bytes
-    - Padding: 12 bytes
-    - Magic: 4 bytes (0x59589696)
-    - Text entries: ID + offset + length + text
-    """
+    """Text extractor from .dat files (legacy format with TEXT_MAGIC)."""
 
     __slots__ = ("_log",)
 
@@ -237,7 +187,6 @@ class TextExtractor:
         self._log = log_callback or logger.info
 
     def extract(self, input_dir: Path, output_file: Path) -> ExtractionResult:
-        """Extract texts from .dat files to CSV."""
         try:
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -261,29 +210,24 @@ class TextExtractor:
                     if entries:
                         self._log(f"Processed: {dat_file.name} ({len(entries)} rows)")
 
-            return ExtractionResult.ok(
-                f"Extracted {total_texts} texts",
-                texts=total_texts,
-            )
+            return ExtractionResult.ok(f"Extracted {total_texts} texts", texts=total_texts)
 
         except Exception as e:
             logger.exception("Text extraction failed")
             return ExtractionResult.fail(str(e))
 
     def _extract_from_dat(self, dat_file: Path, start_number: int) -> Iterator[TextEntry]:
-        """Extract texts from single .dat file."""
         try:
             with open(dat_file, "rb") as f:
-                # Check magic at offset 16
                 f.seek(16)
                 if f.read(4) != TEXT_MAGIC:
                     return
 
                 f.seek(0)
                 count_full = struct.unpack("<I", f.read(4))[0]
-                f.read(4)  # padding
+                f.read(4)
                 count_text = struct.unpack("<I", f.read(4))[0]
-                f.read(12)  # padding
+                f.read(12)
 
                 code = f.read(count_full).hex()
                 f.read(17)
@@ -315,7 +259,6 @@ class TextExtractor:
             logger.warning(f"Error reading {dat_file}: {e}")
 
     def pack(self, csv_file: Path, output_dir: Path) -> ExtractionResult:
-        """Pack texts from CSV back to .dat files."""
         try:
             output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -345,7 +288,6 @@ class TextExtractor:
             return ExtractionResult.fail(str(e))
 
     def _pack_to_dat(self, entries: list[TextEntry], output_path: Path) -> None:
-        """Pack entries to single .dat file."""
         if not entries:
             return
 
@@ -357,53 +299,46 @@ class TextExtractor:
         work_blocks_bytes = struct.pack("<II", work_blocks, 0)
         file_bytes = TEXT_MAGIC + b"\x00\x00\x00\x00"
 
-        unknown_bytes = b""
-        id_bytes = b""
-        text_bytes = b""
+        start_unk = len(all_blocks_bytes) + len(work_blocks_bytes) + len(file_bytes)
+        start_id = start_unk + all_blocks + 17
+        curr_text = start_id + all_blocks * 16
 
-        base_offset = (
-            len(all_blocks_bytes)
-            + len(work_blocks_bytes)
-            + len(file_bytes)
-            + all_blocks
-            + 17
-            + all_blocks * 16
-        )
-        current_text_offset = base_offset
+        filled_bytes_unk = b""
+        filled_bytes_id = b""
+        filled_bytes_text = b""
 
         for entry in entries:
             text = entry.original_text.replace("\\n", "\x0a").replace("\\r", "\x0d")
             text_encoded = text.encode("utf-8")
 
-            unknown_bytes += bytes.fromhex(entry.unknown)
-            id_bytes += bytes.fromhex(entry.text_id)
+            unk_byte = bytes.fromhex(entry.unknown)
+            filled_bytes_unk += unk_byte
+            start_unk += 1
 
-            offset_from_id = current_text_offset - (
-                len(all_blocks_bytes)
-                + len(work_blocks_bytes)
-                + len(file_bytes)
-                + len(unknown_bytes)
-                + 17
-                + len(id_bytes)
-            )
+            if start_unk >= all_blocks + 24:
+                if len(filled_bytes_unk) >= 16:
+                    filled_bytes_unk += b"\xff" + filled_bytes_unk[:16]
+                else:
+                    filled_bytes_unk += b"\xff" + filled_bytes_unk + b"\x80" * (16 - len(filled_bytes_unk))
 
-            id_bytes += struct.pack("<II", offset_from_id + 8, len(text_encoded))
-            text_bytes += text_encoded
-            current_text_offset += len(text_encoded)
+            id_byte = bytes.fromhex(entry.text_id)
+            filled_bytes_id += id_byte
+            start_id += 8
 
-        # Padding
-        if len(unknown_bytes) >= 16:
-            unknown_bytes += b"\xff" + unknown_bytes[:16]
-        else:
-            unknown_bytes += b"\xff" + unknown_bytes + b"\x80" * (16 - len(unknown_bytes))
+            offset_len = struct.pack("<II", curr_text - start_id, len(text_encoded))
+            filled_bytes_id += offset_len
+            start_id += 8
+
+            filled_bytes_text += text_encoded
+            curr_text += len(text_encoded)
 
         with open(output_path, "wb") as f:
             f.write(all_blocks_bytes)
             f.write(work_blocks_bytes)
             f.write(file_bytes)
-            f.write(unknown_bytes)
-            f.write(id_bytes)
-            f.write(text_bytes)
+            f.write(filled_bytes_unk)
+            f.write(filled_bytes_id)
+            f.write(filled_bytes_text)
 
 
 def extract_game_locale(
@@ -411,29 +346,17 @@ def extract_game_locale(
     output_base_dir: Path,
     log_callback: LogCallback | None = None,
 ) -> ExtractionResult:
-    """
-    Full extraction pipeline for game locale file.
-
-    Args:
-        locale_file: Path to locale file (translate_words_map_XX)
-        output_base_dir: Base output directory
-        log_callback: Optional logging callback
-
-    Returns:
-        ExtractionResult with operation details
-    """
+    """Full extraction pipeline: archive -> .dat files -> CSV."""
     lang_code = locale_file.name.replace("translate_words_map_", "")
     dat_dir = output_base_dir / "dat" / lang_code
     csv_file = output_base_dir / "csv" / f"{lang_code}.csv"
 
-    # Step 1: Extract archive
     binary_extractor = BinaryExtractor(log_callback)
     archive_result = binary_extractor.extract(locale_file, dat_dir)
 
     if not archive_result.success:
         return archive_result
 
-    # Step 2: Extract texts
     text_extractor = TextExtractor(log_callback)
     text_result = text_extractor.extract(dat_dir, csv_file)
 

@@ -21,7 +21,6 @@ wheels/
 *.egg
 
 # Virtual environments
-.env
 .venv/
 venv/
 ENV/
@@ -50,17 +49,27 @@ htmlcov/
 logs/
 *.log
 
-# Data (large files)
+# Binary/Data files
+*.dat
+*.bin
+translate_words_map_*
+
+# Temp files
+temp_*
+test.py
+
+# Data directories (large files)
 data/source/dat/
-data/source/csv/*.csv
-data/translated/*.csv
+data/source/csv/
+data/packed/
+data/translated/
 data/progress/
 
-# Keep directory structure
-!data/source/dat/.gitkeep
-!data/source/csv/.gitkeep
-!data/translated/.gitkeep
-!data/progress/.gitkeep
+# Keep directory structure with .gitkeep
+!**/.gitkeep
+
+_*.py
+_*.txt
 
 # OS
 .DS_Store
@@ -69,4 +78,3 @@ Thumbs.db
 # Secrets
 .env
 !.env.example
-

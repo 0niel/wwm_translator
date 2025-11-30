@@ -18,12 +18,13 @@ languages:
   original: "zh_cn"    # Original language (Chinese) - for context
   source: "en"         # Source language for translation (English)
   target: "ru"         # Target language (Russian)
+  patch_lang: "de"     # Language file to patch (replace with translations)
   context_languages: []  # Additional context languages
 
 # LLM provider settings
 llm:
   provider: "openrouter"              # openrouter, openai, anthropic, google
-  model: "x-ai/grok-4-fast"    # Model via OpenRouter
+  model: "deepseek/deepseek-chat-v3-0324"    # Model via OpenRouter
   temperature: 0.3                     # Lower = more deterministic
   max_tokens: 4096                     # Max tokens per response
   timeout: 120                         # Request timeout (seconds)
@@ -36,7 +37,7 @@ batch:
   context_before: 4             # Context lines before batch
   context_after: 4              # Context lines after batch  
   max_tokens_per_batch: 4000    # Token limit per batch
-  concurrent_requests: 5        # Parallel requests (2 for free tier with rate limiting)
+  concurrent_requests: 15        # Parallel requests (2 for free tier with rate limiting)
   delay_between_batches: 0.3    # Delay between batch windows (seconds)
 
 # Progress tracking

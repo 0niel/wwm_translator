@@ -25,39 +25,25 @@ class TokenStats:
 
     @property
     def total_tokens(self) -> int:
-        """Total tokens used."""
         return self.input_tokens + self.output_tokens
 
     def add(self, input_tokens: int, output_tokens: int) -> None:
-        """Add token counts."""
         self.input_tokens += input_tokens
         self.output_tokens += output_tokens
 
     def merge(self, other: TokenStats) -> None:
-        """Merge another TokenStats into this one."""
         self.input_tokens += other.input_tokens
         self.output_tokens += other.output_tokens
 
     def estimate_cost(self, price_input: float, price_output: float) -> float:
-        """
-        Estimate cost in USD.
-
-        Args:
-            price_input: Price per 1M input tokens
-            price_output: Price per 1M output tokens
-
-        Returns:
-            Estimated cost in USD
-        """
+        """Estimate cost in USD (prices per 1M tokens)."""
         input_cost = (self.input_tokens / 1_000_000) * price_input
         output_cost = (self.output_tokens / 1_000_000) * price_output
         return input_cost + output_cost
 
     def format_stats(self, price_input: float = 0.0, price_output: float = 0.0) -> str:
-        """Format statistics as string."""
         cost = self.estimate_cost(price_input, price_output)
         cost_str = f"${cost:.4f}" if cost > 0 else "FREE"
-
         return (
             f"Tokens: {self.total_tokens:,} "
             f"(in: {self.input_tokens:,}, out: {self.output_tokens:,}) | "
@@ -67,34 +53,28 @@ class TokenStats:
 
 @dataclass
 class CostConfig:
-    """Cost configuration."""
+    """Cost configuration (USD per 1M tokens)."""
 
-    price_input: float = 0.0  # USD per 1M input tokens
-    price_output: float = 0.0  # USD per 1M output tokens
+    price_input: float = 0.0
+    price_output: float = 0.0
 
     @property
     def is_free(self) -> bool:
-        """Check if model is free."""
         return self.price_input == 0.0 and self.price_output == 0.0
 
 
 class TokenCounter:
-    """
-    Token counter with tiktoken support.
+    """Token counter with tiktoken support, falls back to approximate counting."""
 
-    Falls back to approximate counting for unsupported models.
-    """
-
-    # Model to tiktoken encoding mapping
     MODEL_ENCODINGS = {
         "gpt-4": "cl100k_base",
         "gpt-4o": "cl100k_base",
         "gpt-4-turbo": "cl100k_base",
         "gpt-3.5-turbo": "cl100k_base",
-        "claude": "cl100k_base",  # Approximate
-        "gemini": "cl100k_base",  # Approximate
-        "grok": "cl100k_base",  # Approximate
-        "llama": "cl100k_base",  # Approximate
+        "claude": "cl100k_base",
+        "gemini": "cl100k_base",
+        "grok": "cl100k_base",
+        "llama": "cl100k_base",
     }
 
     def __init__(self, model: str = "gpt-4"):
@@ -104,7 +84,6 @@ class TokenCounter:
 
     @lru_cache(maxsize=10)
     def _get_encoder(self, model: str):
-        """Get tiktoken encoder for model."""
         if not TIKTOKEN_AVAILABLE:
             return None
 
@@ -122,11 +101,6 @@ class TokenCounter:
             return None
 
     def count_tokens(self, text: str) -> int:
-        """
-        Count tokens in text.
-
-        Uses tiktoken if available, otherwise approximates.
-        """
         if not text:
             return 0
 
@@ -136,16 +110,13 @@ class TokenCounter:
             except Exception:
                 pass
 
-        # Fallback: approximate (1 token ≈ 4 chars for English, 2 chars for CJK)
-        # Use conservative estimate
+        # Fallback: ~3 chars per token (conservative)
         return max(1, len(text) // 3)
 
     def count_messages(self, messages: list[dict]) -> int:
-        """Count tokens in chat messages."""
         total = 0
         for msg in messages:
-            # Add overhead for message structure
-            total += 4  # <role>, content, etc.
+            total += 4  # Message overhead
             if isinstance(msg, dict):
                 total += self.count_tokens(msg.get("content", ""))
             else:
@@ -154,17 +125,9 @@ class TokenCounter:
         return total
 
     def record_usage(self, input_text: str, output_text: str) -> tuple[int, int]:
-        """
-        Record token usage.
-
-        Returns:
-            (input_tokens, output_tokens)
-        """
         input_tokens = self.count_tokens(input_text)
         output_tokens = self.count_tokens(output_text)
-
         self._stats.add(input_tokens, output_tokens)
-
         return input_tokens, output_tokens
 
     def record_batch(
@@ -173,26 +136,16 @@ class TokenCounter:
         user_message: str,
         response: str,
     ) -> tuple[int, int]:
-        """
-        Record batch translation usage.
-
-        Returns:
-            (input_tokens, output_tokens)
-        """
         input_tokens = self.count_tokens(system_prompt) + self.count_tokens(user_message)
         output_tokens = self.count_tokens(response)
-
         self._stats.add(input_tokens, output_tokens)
-
         return input_tokens, output_tokens
 
     @property
     def stats(self) -> TokenStats:
-        """Get accumulated statistics."""
         return self._stats
 
     def reset(self) -> None:
-        """Reset statistics."""
         self._stats = TokenStats()
 
 
@@ -200,7 +153,6 @@ _counter: TokenCounter | None = None
 
 
 def get_token_counter(model: str = "gpt-4") -> TokenCounter:
-    """Get or create global token counter."""
     global _counter
     if _counter is None or _counter.model != model:
         _counter = TokenCounter(model)
