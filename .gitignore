@@ -52,7 +52,6 @@ logs/
 # Binary/Data files
 *.dat
 *.bin
-translate_words_map_*
 
 # Temp files
 temp_*
@@ -67,10 +66,14 @@ data/progress/
 # Translated files - keep CSVs for GitHub editing
 data/translated/*.dat
 data/translated/packed*/
-data/translated/translate_words_map_*
+data/translated/game_ready*
 
 # Keep translation CSVs in git
 !data/translated/*.csv
+
+# Keep final translation files for download (EN patch)
+!data/translated/translate_words_map_en
+!data/translated/translate_words_map_en_diff
 
 # Keep directory structure with .gitkeep
 !**/.gitkeep
