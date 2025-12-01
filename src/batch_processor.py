@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .config import AppConfig, EnvConfig, get_config, get_env_config
-from .models import TranslationEntry, TranslationProgress, TranslationStatus
+from .models import ErrorMarkers, TranslationEntry, TranslationProgress, TranslationStatus
 from .tokenizer import CostConfig, TokenCounter
 
 
@@ -202,6 +202,12 @@ class ProgressTracker:
         """Get saved translation."""
         return self._translations.get(entry_id)
 
+    def remove(self, entry_id: str) -> None:
+        """Remove translation (for retry)."""
+        if entry_id in self._translations:
+            del self._translations[entry_id]
+            self._dirty = True
+
     @staticmethod
     def _file_hash(path: Path) -> str:
         """Calculate MD5 hash."""
@@ -334,6 +340,18 @@ class BatchProcessor:
                         restored += 1
                 self._log(f"Restored {restored} translations from previous session")
 
+                # Check for entries with error markers - they need retry
+                retry_count = 0
+                for entry in entries:
+                    if entry.needs_retry():
+                        entry.mark_for_retry()
+                        tracker.remove(entry.id)  # Remove from tracker so it gets re-translated
+                        retry_count += 1
+                        progress.translated_entries -= 1
+
+                if retry_count > 0:
+                    self._log(f"Found {retry_count} entries with error markers - will retry")
+
         if progress is None:
             progress = tracker.init_new(len(entries))
 
@@ -353,6 +371,8 @@ class BatchProcessor:
 
         batches = list(self._create_batches(to_translate))
         progress.total_batches = len(batches)
+        # Reset batch counter - we're processing fresh batches from to_translate list
+        progress.current_batch = 0
 
         self._log(
             f"Batches: {len(batches)} (size: {self._config.batch.size}, parallel: {self._config.batch.concurrent_requests})"

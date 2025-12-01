@@ -18,13 +18,13 @@ languages:
   original: "zh_cn"    # Original language (Chinese) - for context
   source: "en"         # Source language for translation (English)
   target: "ru"         # Target language (Russian)
-  patch_lang: "de"     # Language file to patch (replace with translations)
+  patch_lang: "en"     # Language file to patch (replace with translations)
   context_languages: []  # Additional context languages
 
 # LLM provider settings
 llm:
   provider: "openrouter"              # openrouter, openai, anthropic, google
-  model: "deepseek/deepseek-chat-v3-0324"    # Model via OpenRouter
+  model: "google/gemini-2.5-flash-lite"    # Model via OpenRouter
   temperature: 0.3                     # Lower = more deterministic
   max_tokens: 4096                     # Max tokens per response
   timeout: 120                         # Request timeout (seconds)

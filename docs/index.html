@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="ru" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Where Winds Meet — Русская локализация</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bg: '#09090b',
+                        surface: '#18181b',
+                        border: '#27272a',
+                        muted: '#71717a',
+                        accent: '#3b82f6'
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', -apple-system, sans-serif; }
+        body { background: #09090b; color: #fafafa; }
+        .gradient-text { background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .search-hl { background: rgba(59,130,246,0.3); border-radius: 2px; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #09090b; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 4px; }
+        table { border-collapse: separate; border-spacing: 0; }
+        th { position: sticky; top: 0; background: #18181b; z-index: 10; }
+    </style>
+</head>
+<body class="antialiased">
+    <nav class="fixed top-0 left-0 right-0 z-50 bg-bg/90 backdrop-blur-lg border-b border-border">
+        <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="text-accent font-bold">逆</span>
+                <span class="font-semibold text-sm">WWM RU</span>
+            </div>
+            <div class="hidden md:flex items-center gap-6 text-sm text-muted">
+                <a href="#stats" class="hover:text-white transition-colors">Статистика</a>
+                <a href="#table" class="hover:text-white transition-colors">Таблица</a>
+                <a href="#download" class="hover:text-white transition-colors">Скачать</a>
+                <a href="#install" class="hover:text-white transition-colors">Установка</a>
+            </div>
+            <a href="#download" class="bg-accent text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-accent/90 transition-colors">
+                Скачать
+            </a>
+        </div>
+    </nav>
+
+    <section class="pt-32 pb-20 px-6">
+        <div class="max-w-4xl mx-auto text-center">
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface text-muted text-xs mb-8">
+                <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                Активная разработка
+            </div>
+            <h1 class="text-5xl md:text-6xl font-bold tracking-tight mb-6">
+                <span class="gradient-text">Where Winds Meet</span>
+            </h1>
+            <p class="text-xl text-muted mb-10">Русская локализация</p>
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <a href="#download" class="w-full sm:w-auto bg-accent text-white font-medium px-8 py-3 rounded-lg hover:bg-accent/90 transition-all">
+                    Скачать перевод
+                </a>
+                <a href="#table" class="w-full sm:w-auto bg-surface text-white font-medium px-8 py-3 rounded-lg hover:bg-border transition-all">
+                    Смотреть таблицу
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <section id="stats" class="py-16 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div class="bg-surface rounded-xl p-6 col-span-2 md:col-span-1">
+                    <p class="text-4xl font-bold text-accent mb-1" id="total-progress">92.2%</p>
+                    <p class="text-muted text-sm">Прогресс</p>
+                </div>
+                <div class="bg-surface rounded-xl p-6">
+                    <p class="text-2xl font-bold mb-1" id="translated-count">336,848</p>
+                    <p class="text-muted text-sm">Переведено</p>
+                </div>
+                <div class="bg-surface rounded-xl p-6">
+                    <p class="text-2xl font-bold text-yellow-400 mb-1" id="stat-issues">10,746</p>
+                    <p class="text-muted text-sm">Требует правок</p>
+                </div>
+                <div class="bg-surface rounded-xl p-6">
+                    <p class="text-2xl font-bold text-muted mb-1" id="stat-skipped">8,957</p>
+                    <p class="text-muted text-sm">Пропущено</p>
+                </div>
+                <div class="bg-surface rounded-xl p-6">
+                    <p class="text-2xl font-bold mb-1" id="total-count">365,229</p>
+                    <p class="text-muted text-sm">Всего строк</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="table" class="py-16 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold mb-1">Таблица переводов</h2>
+                    <p class="text-muted text-sm">Все строки из ru.csv</p>
+                </div>
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <div class="relative flex-1 md:w-80">
+                        <input type="text" id="search-input" placeholder="Поиск по ID, EN или RU..."
+                            class="w-full bg-surface text-white placeholder-muted px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/50">
+                        <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </div>
+                    <select id="status-filter" class="bg-surface text-white px-3 py-2.5 rounded-lg text-sm focus:outline-none">
+                        <option value="all">Все</option>
+                        <option value="translated">Переведено</option>
+                        <option value="issues">С ошибками</option>
+                    </select>
+                </div>
+            </div>
+            <div class="bg-surface rounded-xl overflow-hidden">
+                <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-muted border-b border-border">
+                                <th class="px-4 py-3 font-medium w-40">ID</th>
+                                <th class="px-4 py-3 font-medium">English</th>
+                                <th class="px-4 py-3 font-medium">Русский</th>
+                                <th class="px-4 py-3 font-medium w-24">Статус</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body" class="divide-y divide-border">
+                            <tr><td colspan="4" class="px-4 py-12 text-center text-muted">Загрузка данных...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="px-4 py-3 border-t border-border flex items-center justify-between">
+                    <p class="text-muted text-sm"><span id="showing-count">0</span> из <span id="filtered-count">0</span> строк</p>
+                    <div class="flex items-center gap-2">
+                        <button id="prev-page" class="px-3 py-1.5 rounded bg-border text-muted hover:text-white text-sm disabled:opacity-50">← Назад</button>
+                        <span class="text-muted text-sm px-2" id="page-info">1 / 1</span>
+                        <button id="next-page" class="px-3 py-1.5 rounded bg-border text-muted hover:text-white text-sm disabled:opacity-50">Вперёд →</button>
+                    </div>
+                </div>
+            </div>
+            <p class="text-muted text-xs mt-4">Кликните на строку для просмотра деталей и редактирования</p>
+        </div>
+    </section>
+
+    <section id="download" class="py-16 px-6 bg-surface/50">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-2xl font-bold mb-8 text-center">Скачать перевод</h2>
+            <div class="grid md:grid-cols-2 gap-4">
+                <div class="bg-surface rounded-xl p-6">
+                    <h3 class="font-semibold mb-2">Основной перевод</h3>
+                    <p class="text-muted text-sm mb-4">translate_words_map_en</p>
+                    <a href="https://github.com/pshemass/wwm_translator/raw/main/data/translated/translate_words_map_en" 
+                        class="block w-full bg-accent text-white font-medium py-2.5 rounded-lg text-center text-sm hover:bg-accent/90 transition-colors">
+                        Скачать
+                    </a>
+                </div>
+                <div class="bg-surface rounded-xl p-6">
+                    <h3 class="font-semibold mb-2">Патч обновлений</h3>
+                    <p class="text-muted text-sm mb-4">translate_words_map_en_diff</p>
+                    <a href="https://github.com/pshemass/wwm_translator/raw/main/data/translated/translate_words_map_en_diff" 
+                        class="block w-full bg-border text-white font-medium py-2.5 rounded-lg text-center text-sm hover:bg-muted/20 transition-colors">
+                        Скачать
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="install" class="py-16 px-6">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-2xl font-bold mb-8 text-center">Установка</h2>
+            <div class="space-y-3">
+                <div class="bg-surface rounded-xl p-5 flex gap-4">
+                    <span class="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center text-sm font-semibold flex-shrink-0">1</span>
+                    <div>
+                        <p class="font-medium mb-1">Найдите папку локализации</p>
+                        <code class="text-xs text-muted">...\Where Winds Meet\Game\Content\Paks\LocalizationAsset\Localization</code>
+                    </div>
+                </div>
+                <div class="bg-surface rounded-xl p-5 flex gap-4">
+                    <span class="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center text-sm font-semibold flex-shrink-0">2</span>
+                    <div>
+                        <p class="font-medium mb-1">Скопируйте скачанные файлы в папку</p>
+                    </div>
+                </div>
+                <div class="bg-surface rounded-xl p-5 flex gap-4">
+                    <span class="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center text-sm font-semibold flex-shrink-0">3</span>
+                    <div>
+                        <p class="font-medium mb-1">В настройках игры выберите <span class="text-accent">English (EN)</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="py-8 px-6 border-t border-border">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted">
+            <span>WWM Translator</span>
+            <span>Неофициальный проект</span>
+            <a href="https://github.com/pshemass/wwm_translator" target="_blank" class="hover:text-white transition-colors flex items-center gap-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                GitHub
+            </a>
+        </div>
+    </footer>
+
+    <div id="modal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/80" onclick="closeModal()"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl m-4">
+            <div class="bg-surface rounded-xl p-6 max-h-[80vh] overflow-auto">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-semibold">Детали перевода</h3>
+                    <button onclick="closeModal()" class="text-muted hover:text-white">✕</button>
+                </div>
+                <div id="modal-content"></div>
+                <div class="mt-6 flex gap-3">
+                    <a id="modal-edit-link" href="#" target="_blank" class="flex-1 bg-accent text-white font-medium py-2.5 rounded-lg text-center text-sm">
+                        Редактировать на GitHub
+                    </a>
+                    <button onclick="closeModal()" class="px-4 py-2.5 bg-border rounded-lg text-sm">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allData = [];
+        let filtered = [];
+        let page = 1;
+        const perPage = 50;
+
+        async function init() {
+            try {
+                const statsRes = await fetch('data/stats.json');
+                if (statsRes.ok) {
+                    const s = await statsRes.json();
+                    document.getElementById('total-progress').textContent = s.progress + '%';
+                    document.getElementById('translated-count').textContent = s.translated.toLocaleString();
+                    document.getElementById('total-count').textContent = s.total.toLocaleString();
+                    document.getElementById('stat-issues').textContent = (s.issues || 0).toLocaleString();
+                    document.getElementById('stat-skipped').textContent = s.skipped.toLocaleString();
+                }
+            } catch(e) {}
+
+            try {
+                const transRes = await fetch('data/translations.json');
+                if (transRes.ok) {
+                    allData = await transRes.json();
+                    filtered = [...allData];
+                    render();
+                }
+            } catch(e) {
+                document.getElementById('table-body').innerHTML = '<tr><td colspan="4" class="px-4 py-12 text-center text-muted">Ошибка загрузки данных</td></tr>';
+            }
+        }
+
+        function filter() {
+            const q = document.getElementById('search-input').value.toLowerCase();
+            const status = document.getElementById('status-filter').value;
+            
+            filtered = allData.filter(t => {
+                const matchSearch = !q || q.length < 2 || 
+                    (t.id && t.id.toLowerCase().includes(q)) ||
+                    (t.en && t.en.toLowerCase().includes(q)) ||
+                    (t.ru && t.ru.toLowerCase().includes(q));
+                
+                const matchStatus = status === 'all' || 
+                    (status === 'translated' && t.status === 'translated') ||
+                    (status === 'issues' && t.status !== 'translated');
+                
+                return matchSearch && matchStatus;
+            });
+            
+            page = 1;
+            render();
+        }
+
+        function render() {
+            const tbody = document.getElementById('table-body');
+            const q = document.getElementById('search-input').value;
+            
+            if (!filtered.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-12 text-center text-muted">Нет данных</td></tr>';
+                updatePagination();
+                return;
+            }
+
+            const totalPages = Math.ceil(filtered.length / perPage);
+            const start = (page - 1) * perPage;
+            const items = filtered.slice(start, start + perPage);
+
+            tbody.innerHTML = items.map(t => `
+                <tr class="hover:bg-border/50 cursor-pointer transition-colors" onclick="showDetail('${t.id}')">
+                    <td class="px-4 py-3"><code class="text-xs text-muted">${t.id.substring(0, 16)}</code></td>
+                    <td class="px-4 py-3 text-muted max-w-xs truncate">${hl(truncate(t.en, 80), q)}</td>
+                    <td class="px-4 py-3 max-w-xs truncate">${hl(truncate(t.ru, 80), q)}</td>
+                    <td class="px-4 py-3">
+                        <span class="inline-flex items-center gap-1 text-xs ${t.status === 'translated' ? 'text-green-400' : 'text-yellow-400'}">
+                            ${t.status === 'translated' ? '✓' : '!'}
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+
+            updatePagination();
+        }
+
+        function updatePagination() {
+            const totalPages = Math.ceil(filtered.length / perPage);
+            const start = (page - 1) * perPage;
+            const end = Math.min(start + perPage, filtered.length);
+            
+            document.getElementById('showing-count').textContent = filtered.length ? `${start + 1}-${end}` : '0';
+            document.getElementById('filtered-count').textContent = filtered.length.toLocaleString();
+            document.getElementById('page-info').textContent = `${page} / ${Math.max(1, totalPages)}`;
+            document.getElementById('prev-page').disabled = page <= 1;
+            document.getElementById('next-page').disabled = page >= totalPages;
+        }
+
+        function truncate(str, len) {
+            if (!str) return '—';
+            return str.length > len ? str.substring(0, len) + '...' : str;
+        }
+
+        function hl(text, q) {
+            if (!q || q.length < 2) return esc(text);
+            const r = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            return esc(text).replace(r, '<span class="search-hl">$1</span>');
+        }
+
+        function esc(t) {
+            if (!t) return '';
+            const d = document.createElement('div');
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        document.getElementById('search-input').addEventListener('input', debounce(filter, 300));
+        document.getElementById('status-filter').addEventListener('change', filter);
+        document.getElementById('prev-page').addEventListener('click', () => { if (page > 1) { page--; render(); } });
+        document.getElementById('next-page').addEventListener('click', () => { 
+            if (page < Math.ceil(filtered.length / perPage)) { page++; render(); }
+        });
+
+        function debounce(fn, ms) {
+            let t;
+            return function(...args) {
+                clearTimeout(t);
+                t = setTimeout(() => fn.apply(this, args), ms);
+            };
+        }
+
+        function showDetail(id) {
+            const item = allData.find(t => t.id === id);
+            if (!item) return;
+            document.getElementById('modal-content').innerHTML = `
+                <div class="space-y-4 text-sm">
+                    <div><p class="text-muted text-xs mb-1">ID</p><code class="text-accent">${item.id}</code></div>
+                    <div><p class="text-muted text-xs mb-1">English</p><div class="bg-bg rounded-lg p-3">${esc(item.en || '—')}</div></div>
+                    ${item.zh ? `<div><p class="text-muted text-xs mb-1">中文</p><div class="bg-bg rounded-lg p-3 text-muted">${esc(item.zh)}</div></div>` : ''}
+                    <div><p class="text-muted text-xs mb-1">Русский</p><div class="bg-bg rounded-lg p-3">${esc(item.ru || '—')}</div></div>
+                </div>
+            `;
+            document.getElementById('modal-edit-link').href = 'https://github.com/pshemass/wwm_translator/blob/main/data/translated/ru.csv';
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.add('hidden');
+        }
+
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+        init();
+    </script>
+</body>
+</html>
+

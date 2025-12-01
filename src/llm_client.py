@@ -22,6 +22,7 @@ from tenacity import (
 )
 
 from .config import EnvConfig, LLMConfig, get_config, get_env_config
+from .models import ErrorMarkers
 
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,8 @@ class ConfigurationError(LLMClientError):
     """Configuration error - should not retry."""
 class TransientError(LLMClientError):
     """Transient error - should retry."""
+class IncompleteResponseError(LLMClientError):
+    """LLM returned fewer items than expected - should retry."""
 class ErrorType(Enum):
     """Error classification for retry decisions."""
 
@@ -255,7 +258,7 @@ class LLMClient:
     @retry(
         stop=stop_after_attempt(5),
         wait=wait_exponential(multiplier=2, min=4, max=120),
-        retry=retry_if_exception_type((RateLimitError, TransientError)),
+        retry=retry_if_exception_type((RateLimitError, TransientError, IncompleteResponseError)),
         before_sleep=before_sleep_log(logger, logging.WARNING),
         after=after_log(logger, logging.DEBUG),
         reraise=True,
@@ -406,15 +409,16 @@ class LLMClient:
         if lines:
             return self._normalize_list(lines, expected_count)
         
-        return ["[PARSE_ERROR]"] * expected_count
+        return [ErrorMarkers.PARSE_ERROR] * expected_count
 
     def _normalize_list(self, items: list, expected: int) -> list[str]:
         """Normalize result list to expected length."""
         result = [str(x) for x in items]
 
         if len(result) < expected:
-            logger.warning(f"Got {len(result)} items, expected {expected}")
-            result.extend(["[MISSING]"] * (expected - len(result)))
+            raise IncompleteResponseError(
+                f"Got {len(result)} items, expected {expected} - retrying..."
+            )
         elif len(result) > expected:
             result = result[:expected]
 

@@ -62,8 +62,15 @@ test.py
 data/source/dat/
 data/source/csv/
 data/packed/
-data/translated/
 data/progress/
+
+# Translated files - keep CSVs for GitHub editing
+data/translated/*.dat
+data/translated/packed*/
+data/translated/translate_words_map_*
+
+# Keep translation CSVs in git
+!data/translated/*.csv
 
 # Keep directory structure with .gitkeep
 !**/.gitkeep

@@ -11,6 +11,26 @@ if TYPE_CHECKING:
     from .config import FilteringConfig
 
 
+class ErrorMarkers:
+    """Markers for translation errors that need retry."""
+    
+    PARSE_ERROR = "[PARSE ERROR]"
+    MISSING = "[MISSING]"
+    
+    # All markers that indicate a failed translation
+    ALL = (PARSE_ERROR, MISSING)
+    
+    @classmethod
+    def contains_error(cls, text: str) -> bool:
+        """Check if text contains any error marker."""
+        return any(marker in text for marker in cls.ALL)
+    
+    @classmethod
+    def is_error_marker(cls, text: str) -> bool:
+        """Check if text is exactly an error marker."""
+        return text.strip() in cls.ALL
+
+
 class TranslationStatus(Enum):
     """Translation entry status."""
 
@@ -121,6 +141,20 @@ class TranslationEntry:
         """Mark as error."""
         self.status = TranslationStatus.ERROR
         self.error_message = message
+
+    def needs_retry(self) -> bool:
+        """Check if translation contains error markers and needs retry."""
+        return (
+            self.status == TranslationStatus.TRANSLATED
+            and self.translated
+            and ErrorMarkers.contains_error(self.translated)
+        )
+
+    def mark_for_retry(self) -> None:
+        """Reset entry for re-translation."""
+        self.translated = ""
+        self.status = TranslationStatus.PENDING
+        self.error_message = ""
 
     def to_dict(self) -> dict[str, str]:
         """Convert to dict for LLM."""

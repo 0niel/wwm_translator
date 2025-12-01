@@ -16,6 +16,7 @@ from rich.table import Table
 
 from src.config import AppConfig, EnvConfig, init_config
 from src.extractor import extract_game_locale
+from src.models import ErrorMarkers
 from src.utils import (
     confirm,
     console,
@@ -549,11 +550,14 @@ def extract_diff(ctx: click.Context) -> None:
 
 @cli.command()
 @click.option("--fix", "-f", is_flag=True, help="Mark invalid translations for re-translation")
+@click.option("--check-broken/--no-check-broken", default=True, help="Also check for broken/corrupted strings")
 @click.pass_context
-def validate(ctx: click.Context, fix: bool) -> None:
-    """Validate translations - check that special symbols count matches original"""
+def validate(ctx: click.Context, fix: bool, check_broken: bool) -> None:
+    """Validate translations - check symbols, broken strings, and other issues"""
     import csv
     import re
+
+    from src.issue_fixer import BrokenStringDetector
 
     print_banner()
     config: AppConfig = ctx.obj["config"]
@@ -570,11 +574,9 @@ def validate(ctx: click.Context, fix: bool) -> None:
         return
 
     console.print("[bold]Validating translations...[/bold]")
-    console.print("Checking that special symbol counts match between original and translation")
     console.print()
 
     # Universal pattern to find any special sequences
-    # Matches: {anything}, <anything>, [anything], %x, \n, \r, etc.
     special_pattern = re.compile(
         r'\{[^}]*\}'       # {0}, {name}, {count:d}, etc.
         r'|<[^>]*>'        # <color>, </b>, <img src="x">, etc.
@@ -595,11 +597,18 @@ def validate(ctx: click.Context, fix: bool) -> None:
         for row in reader:
             source_texts[row["ID"]] = row["OriginalText"]
 
+    # Initialize broken string detector
+    broken_detector = BrokenStringDetector() if check_broken else None
+
     # Validate translations
-    issues: list[dict] = []
+    symbol_issues: list[dict] = []
+    broken_issues: list[dict] = []
     valid_count = 0
     total_count = 0
     rows_to_fix: set[str] = set()
+
+    # Track issue types
+    issue_type_counts: dict[str, int] = {}
 
     with open(translated_csv, encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f, delimiter=";")
@@ -611,59 +620,122 @@ def validate(ctx: click.Context, fix: bool) -> None:
             text_id = row["ID"]
             original = source_texts.get(text_id, row.get("English", ""))
             translated = row["Russian"]
+            has_issue = False
 
-            # Extract special sequences
-            orig_specials = extract_specials(original)
-            trans_specials = extract_specials(translated)
-
-            # Compare counts of each unique special
-            orig_counts: dict[str, int] = {}
-            for s in orig_specials:
-                orig_counts[s] = orig_counts.get(s, 0) + 1
-
-            trans_counts: dict[str, int] = {}
-            for s in trans_specials:
-                trans_counts[s] = trans_counts.get(s, 0) + 1
-
-            # Find mismatches
-            all_specials = set(orig_counts.keys()) | set(trans_counts.keys())
-            mismatches = []
-
-            for special in all_specials:
-                orig_n = orig_counts.get(special, 0)
-                trans_n = trans_counts.get(special, 0)
-                if orig_n != trans_n:
-                    mismatches.append(f"'{special}': {orig_n} -> {trans_n}")
-
-            if mismatches:
-                issues.append({
+            # Check for error markers (incomplete LLM responses)
+            if ErrorMarkers.contains_error(translated):
+                symbol_issues.append({
                     "id": text_id,
-                    "mismatches": mismatches,
+                    "type": "error_marker",
+                    "mismatches": ["Contains error marker - incomplete LLM response"],
                     "original": original[:150],
                     "translated": translated[:150],
                 })
                 rows_to_fix.add(text_id)
+                issue_type_counts["error_marker"] = issue_type_counts.get("error_marker", 0) + 1
+                has_issue = True
             else:
+                # Check for broken strings (critical only)
+                if broken_detector:
+                    broken = broken_detector.get_critical_issues(original, translated)
+                    if broken:
+                        broken_issues.append({
+                            "id": text_id,
+                            "type": broken[0].issue_type,
+                            "issues": broken,
+                            "original": original[:150],
+                            "translated": translated[:150],
+                        })
+                        rows_to_fix.add(text_id)
+                        for b in broken:
+                            issue_type_counts[b.issue_type] = issue_type_counts.get(b.issue_type, 0) + 1
+                        has_issue = True
+
+                # Extract special sequences
+                orig_specials = extract_specials(original)
+                trans_specials = extract_specials(translated)
+
+                # Compare counts of each unique special
+                orig_counts: dict[str, int] = {}
+                for s in orig_specials:
+                    orig_counts[s] = orig_counts.get(s, 0) + 1
+
+                trans_counts: dict[str, int] = {}
+                for s in trans_specials:
+                    trans_counts[s] = trans_counts.get(s, 0) + 1
+
+                # Find mismatches
+                all_specials = set(orig_counts.keys()) | set(trans_counts.keys())
+                mismatches = []
+
+                for special in all_specials:
+                    orig_n = orig_counts.get(special, 0)
+                    trans_n = trans_counts.get(special, 0)
+                    if orig_n != trans_n:
+                        mismatches.append(f"'{special}': {orig_n} -> {trans_n}")
+
+                if mismatches:
+                    symbol_issues.append({
+                        "id": text_id,
+                        "type": "symbol_mismatch",
+                        "mismatches": mismatches,
+                        "original": original[:150],
+                        "translated": translated[:150],
+                    })
+                    rows_to_fix.add(text_id)
+                    issue_type_counts["symbol_mismatch"] = issue_type_counts.get("symbol_mismatch", 0) + 1
+                    has_issue = True
+
+            if not has_issue:
                 valid_count += 1
+
+    all_issues = symbol_issues + broken_issues
 
     # Report
     console.print("[bold]Results:[/bold]")
     console.print(f"  Total checked: {total_count:,}")
     console.print(f"  Valid: {valid_count:,}")
-    console.print(f"  Issues found: {len(issues):,}")
+    console.print(f"  Issues found: {len(all_issues):,}")
     console.print()
 
-    if issues:
+    if issue_type_counts:
+        console.print("[bold]Issue breakdown:[/bold]")
+        type_names = {
+            "error_marker": "Error markers ([MISSING], [PARSE ERROR])",
+            "symbol_mismatch": "Symbol count mismatch",
+            "json_artifact": "JSON artifacts",
+            "encoding_error": "Encoding errors",
+            "empty_translation": "Empty translations",
+            "truncated": "Truncated translations",
+            "untranslated": "Untranslated text",
+            "repetition": "Repeated content",
+        }
+        for t, count in sorted(issue_type_counts.items(), key=lambda x: -x[1]):
+            name = type_names.get(t, t)
+            console.print(f"  {name}: {count:,}")
+        console.print()
+
+    if all_issues:
         # Save issues to file
         issues_file = config.paths.translated_dir / "validation_issues.csv"
         with open(issues_file, "w", encoding="utf-8", newline="") as f:
             writer = csv.writer(f, delimiter=";")
-            writer.writerow(["ID", "Mismatches", "Original", "Translated"])
+            writer.writerow(["ID", "Type", "Mismatches", "Original", "Translated"])
 
-            for issue in issues:
+            for issue in symbol_issues:
                 writer.writerow([
                     issue["id"],
+                    issue["type"],
                     " | ".join(issue["mismatches"]),
+                    issue["original"],
+                    issue["translated"],
+                ])
+            
+            for issue in broken_issues:
+                writer.writerow([
+                    issue["id"],
+                    issue["type"],
+                    " | ".join(str(i) for i in issue["issues"]),
                     issue["original"],
                     issue["translated"],
                 ])
@@ -671,20 +743,27 @@ def validate(ctx: click.Context, fix: bool) -> None:
         print_warning(f"Issues saved to: {issues_file}")
 
         # Show sample issues
-        console.print()
-        console.print("[bold]Sample issues (symbol count mismatch):[/bold]")
-        for issue in issues[:5]:
-            console.print(f"  [yellow]{issue['id']}[/yellow]")
-            for m in issue["mismatches"][:3]:
-                console.print(f"    {m}")
-            if len(issue["mismatches"]) > 3:
-                console.print(f"    ... and {len(issue['mismatches']) - 3} more")
+        if symbol_issues:
+            console.print()
+            console.print("[bold]Sample symbol issues:[/bold]")
+            for issue in symbol_issues[:3]:
+                console.print(f"  [yellow]{issue['id']}[/yellow]")
+                for m in issue["mismatches"][:2]:
+                    console.print(f"    {m}")
+
+        if broken_issues:
+            console.print()
+            console.print("[bold]Sample broken strings:[/bold]")
+            for issue in broken_issues[:3]:
+                console.print(f"  [red]{issue['id']}[/red] - {issue['type']}")
+                console.print(f"    {issue['translated'][:60]}...")
 
         # Fix mode: mark for re-translation
         if fix and rows_to_fix:
             console.print()
             console.print("[bold]Marking invalid translations for re-translation...[/bold]")
 
+            # Update CSV
             rows = []
             with open(translated_csv, encoding="utf-8", newline="") as f:
                 reader = csv.DictReader(f, delimiter=";")
@@ -702,10 +781,135 @@ def validate(ctx: click.Context, fix: bool) -> None:
                 writer.writeheader()
                 writer.writerows(rows)
 
+            # Also remove from progress tracker (JSON files)
+            import json
+            progress_dir = config.paths.progress_dir
+            translations_file = progress_dir / f"{source_csv.stem}_translations.json"
+            
+            if translations_file.exists():
+                try:
+                    tracker_data = json.loads(translations_file.read_text(encoding="utf-8"))
+                    removed = 0
+                    for entry_id in rows_to_fix:
+                        if entry_id in tracker_data:
+                            del tracker_data[entry_id]
+                            removed += 1
+                    
+                    translations_file.write_text(
+                        json.dumps(tracker_data, ensure_ascii=False, indent=2),
+                        encoding="utf-8"
+                    )
+                    console.print(f"  Removed {removed:,} from progress tracker")
+                except Exception as e:
+                    print_warning(f"Could not update progress tracker: {e}")
+
             print_success(f"Marked {fixed:,} translations for re-translation")
             console.print("Run 'translate' again to re-translate them")
     else:
         print_success("All translations are valid!")
+
+
+@cli.command("fix-issues")
+@click.option("--batch-size", "-b", type=int, default=5, help="Issues per LLM batch")
+@click.option("--limit", "-l", type=int, help="Limit number of issues to process")
+@click.option("--dry-run", "-d", is_flag=True, help="Show what would be fixed without applying")
+@click.pass_context
+def fix_issues(ctx: click.Context, batch_size: int, limit: int | None, dry_run: bool) -> None:
+    """Fix validation issues using LLM"""
+    print_banner()
+
+    from src.issue_fixer import IssueFixer
+    from src.llm_client import LLMClient
+
+    config: AppConfig = ctx.obj["config"]
+    env_config: EnvConfig = ctx.obj["env"]
+
+    issues_file = config.paths.translated_dir / "validation_issues.csv"
+    translated_csv = config.get_output_csv()
+
+    if not issues_file.exists():
+        print_error(f"Issues file not found: {issues_file}")
+        console.print("Run 'validate' command first")
+        return
+
+    if not translated_csv.exists():
+        print_error(f"Translations not found: {translated_csv}")
+        return
+
+    # Load issues
+    console.print("[bold]Loading validation issues...[/bold]")
+    
+    try:
+        llm_client = LLMClient(config.llm, env_config)
+        fixer = IssueFixer(
+            llm_client=llm_client,
+            batch_size=batch_size,
+            log_callback=lambda msg: console.print(msg),
+        )
+        
+        issues = fixer.load_issues(issues_file)
+        console.print(f"  Found {len(issues):,} issues")
+        
+        if limit:
+            issues = issues[:limit]
+            console.print(f"  Processing first {limit}")
+        
+        console.print()
+        
+        # Analyze issue types
+        by_type: dict[str, int] = {}
+        for issue in issues:
+            t = issue.issue_type
+            by_type[t] = by_type.get(t, 0) + 1
+        
+        console.print("[bold]Issue breakdown:[/bold]")
+        type_names = {
+            "numbered_brackets": "Numbered brackets [1], [2]... (auto-fix)",
+            "newline_mismatch": "Newline \\n mismatches",
+            "tag_translated": "Game tags translated",
+            "placeholder_translated": "Placeholder brackets translated",
+            "other": "Other issues",
+        }
+        for t, count in sorted(by_type.items(), key=lambda x: -x[1]):
+            console.print(f"  {type_names.get(t, t)}: {count:,}")
+        console.print()
+        
+        # Fix issues
+        console.print("[bold cyan]Fixing issues...[/bold cyan]")
+        console.print()
+        
+        fixes = fixer.fix_issues(issues)
+        
+        console.print()
+        console.print(f"[bold]Total fixes: {len(fixes):,}[/bold]")
+        
+        if not fixes:
+            print_warning("No fixes to apply")
+            return
+        
+        if dry_run:
+            console.print()
+            console.print("[yellow]DRY RUN - not applying changes[/yellow]")
+            console.print()
+            console.print("[bold]Sample fixes:[/bold]")
+            for id_, fixed in list(fixes.items())[:5]:
+                console.print(f"  {id_}: {fixed[:80]}...")
+            return
+        
+        # Apply fixes
+        console.print()
+        console.print("[bold]Applying fixes...[/bold]")
+        updated = fixer.apply_fixes(fixes, translated_csv)
+        
+        print_success(f"Updated {updated:,} translations in {translated_csv.name}")
+        console.print()
+        console.print("[bold]Next steps:[/bold]")
+        console.print("  1. Run 'validate' again to check remaining issues")
+        console.print("  2. Repeat 'fix-issues' if needed")
+
+    except Exception as e:
+        print_error(str(e))
+        logger.exception("Fix issues failed")
 
 
 @cli.command("test-llm")
@@ -748,6 +952,111 @@ def test_llm(ctx: click.Context) -> None:
         # Handle unicode errors in error message
         error_msg = str(e).encode("ascii", errors="replace").decode("ascii")
         print_error(error_msg)
+
+
+@cli.command("export-web")
+@click.option("--limit", "-l", type=int, help="Limit number of entries to export")
+@click.pass_context
+def export_web(ctx: click.Context, limit: int | None) -> None:
+    """Export translations to JSON for GitHub Pages"""
+    import csv
+    import json
+
+    print_banner()
+    config: AppConfig = ctx.obj["config"]
+
+    source_csv = config.get_source_csv()
+    original_csv = config.get_original_csv()
+    translated_csv = config.get_output_csv()
+    docs_dir = Path("docs/data")
+
+    if not translated_csv.exists():
+        print_error(f"Translations not found: {translated_csv}")
+        return
+
+    docs_dir.mkdir(parents=True, exist_ok=True)
+
+    console.print("[bold]Exporting translations for web...[/bold]")
+    console.print()
+
+    # Load source texts (English)
+    source_texts: dict[str, str] = {}
+    if source_csv.exists():
+        with open(source_csv, encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f, delimiter=";")
+            for row in reader:
+                source_texts[row["ID"]] = row["OriginalText"]
+
+    # Load original texts (Chinese)
+    original_texts: dict[str, str] = {}
+    if original_csv.exists():
+        with open(original_csv, encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f, delimiter=";")
+            for row in reader:
+                original_texts[row["ID"]] = row["OriginalText"]
+
+    # Load and export translations
+    translations = []
+    stats = {
+        "total": 0,
+        "translated": 0,
+        "skipped": 0,
+        "issues": 0,
+    }
+
+    with open(translated_csv, encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f, delimiter=";")
+        for row in reader:
+            stats["total"] += 1
+            
+            status = row.get("Status", "")
+            if status == "translated":
+                stats["translated"] += 1
+            elif status == "skipped":
+                stats["skipped"] += 1
+            else:
+                stats["issues"] += 1
+
+            # Only export translated entries for web (to reduce file size)
+            if status == "translated" and row.get("Russian"):
+                entry = {
+                    "id": row["ID"],
+                    "en": source_texts.get(row["ID"], row.get("English", "")),
+                    "ru": row["Russian"],
+                    "status": status,
+                }
+                # Add Chinese if available
+                if zh := original_texts.get(row["ID"]):
+                    entry["zh"] = zh
+                
+                translations.append(entry)
+                
+                if limit and len(translations) >= limit:
+                    break
+
+    # Save translations JSON
+    translations_file = docs_dir / "translations.json"
+    with open(translations_file, "w", encoding="utf-8") as f:
+        json.dump(translations, f, ensure_ascii=False, separators=(",", ":"))
+
+    console.print(f"  Exported {len(translations):,} translations")
+
+    # Save stats JSON
+    stats["progress"] = round(stats["translated"] / stats["total"] * 100, 1) if stats["total"] else 0
+    stats_file = docs_dir / "stats.json"
+    with open(stats_file, "w", encoding="utf-8") as f:
+        json.dump(stats, f, ensure_ascii=False, indent=2)
+
+    console.print(f"  Stats: {stats['progress']}% translated")
+    console.print()
+
+    print_success(f"Exported to {docs_dir}/")
+    console.print()
+    console.print("[bold]Files created:[/bold]")
+    console.print(f"  - translations.json ({format_size(translations_file.stat().st_size)})")
+    console.print(f"  - stats.json")
+    console.print()
+    console.print("Now commit and push to GitHub, then enable GitHub Pages on /docs folder")
 
 
 if __name__ == "__main__":
