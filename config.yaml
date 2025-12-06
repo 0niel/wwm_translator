@@ -24,9 +24,9 @@ languages:
 # LLM provider settings
 llm:
   provider: "openrouter"              # openrouter, openai, anthropic, google
-  model: "google/gemini-2.5-flash-lite"    # Model via OpenRouter
-  temperature: 0.3                     # Lower = more deterministic
-  max_tokens: 4096                     # Max tokens per response
+  model: "qwen/qwen3-235b-a22b:free"    # Model via OpenRouter
+  temperature: 0.5                     # Lower = more deterministic
+  max_tokens: 100000                   # Max tokens per response
   timeout: 120                         # Request timeout (seconds)
   max_retries: 3                       # Retry attempts
   retry_delay: 5                       # Delay between retries (seconds)
@@ -36,7 +36,7 @@ batch:
   size: 10                      # Texts per batch (smaller for free tier)
   context_before: 4             # Context lines before batch
   context_after: 4              # Context lines after batch  
-  max_tokens_per_batch: 4000    # Token limit per batch
+  max_tokens_per_batch: 100000    # Token limit per batch
   concurrent_requests: 15        # Parallel requests (2 for free tier with rate limiting)
   delay_between_batches: 0.3    # Delay between batch windows (seconds)
 

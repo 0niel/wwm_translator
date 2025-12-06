@@ -362,6 +362,7 @@ def autopatch(ctx: click.Context, install: bool, with_diff: bool) -> None:
 
     source_dat_dir = config.paths.source_dir / "dat" / source_lang
     translated_csv = config.get_output_csv()
+    source_csv = config.get_source_csv()
 
     if not source_dat_dir.exists():
         print_error(f"Source .dat files not found: {source_dat_dir}")
@@ -373,18 +374,38 @@ def autopatch(ctx: click.Context, install: bool, with_diff: bool) -> None:
         console.print("Run 'translate' command first")
         return
 
-    # Load translations (ID -> Russian text)
+    # Load English originals from source CSV (fallback for untranslated)
+    console.print("[bold]Loading source texts...[/bold]")
+    english_texts: dict[str, str] = {}
+    if source_csv.exists():
+        with open(source_csv, encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f, delimiter=";")
+            for row in reader:
+                if row.get("OriginalText"):
+                    # Unescape newlines
+                    text = row["OriginalText"].replace("\\n", "\n").replace("\\r", "\r")
+                    english_texts[row["ID"]] = text
+        console.print(f"  Loaded {len(english_texts):,} English source texts")
+
+    # Load translations (ID -> Russian text) - only translated ones
     console.print("[bold]Loading translations...[/bold]")
     translations: dict[str, str] = {}
+    untranslated_count = 0
     with open(translated_csv, encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f, delimiter=";")
         for row in reader:
+            text_id = row["ID"]
             if row.get("Status") == "translated" and row.get("Russian"):
-                # Unescape newlines
+                # Use Russian translation
                 text = row["Russian"].replace("\\n", "\n").replace("\\r", "\r")
-                translations[row["ID"]] = text
+                translations[text_id] = text
+            elif text_id in english_texts:
+                # Use English original for pending/error/skipped/empty
+                translations[text_id] = english_texts[text_id]
+                untranslated_count += 1
 
-    console.print(f"  Loaded {len(translations):,} translations")
+    console.print(f"  Loaded {len(translations) - untranslated_count:,} Russian translations")
+    console.print(f"  Using {untranslated_count:,} English fallbacks for untranslated strings")
     console.print()
 
     def patch_dat_files(source_dir: Path, output_name: str) -> Path | None:
@@ -450,6 +471,27 @@ def autopatch(ctx: click.Context, install: bool, with_diff: bool) -> None:
     if with_diff:
         diff_dat_dir = config.paths.source_dir / "dat" / f"{source_lang}_diff"
         if diff_dat_dir.exists():
+            # Load English texts from diff CSV for fallback
+            diff_source_csv = config.paths.source_dir / "csv" / f"{source_lang}_diff.csv"
+            if diff_source_csv.exists():
+                console.print("[bold]Loading diff source texts...[/bold]")
+                with open(diff_source_csv, encoding="utf-8", newline="") as f:
+                    reader = csv.DictReader(f, delimiter=";")
+                    diff_english_count = 0
+                    for row in reader:
+                        if row.get("OriginalText"):
+                            text = row["OriginalText"].replace("\\n", "\n").replace("\\r", "\r")
+                            text_id = row["ID"]
+                            # Add to english_texts if not already present
+                            if text_id not in english_texts:
+                                english_texts[text_id] = text
+                                diff_english_count += 1
+                            # Also add to translations if not translated
+                            if text_id not in translations:
+                                translations[text_id] = text
+                    console.print(f"  Loaded {diff_english_count:,} diff English texts")
+                console.print()
+            
             diff_output = patch_dat_files(diff_dat_dir, f"{patch_lang}_diff")
         else:
             print_warning(f"Diff .dat files not found: {diff_dat_dir}")
