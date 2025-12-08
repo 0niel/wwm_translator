@@ -61,12 +61,20 @@ test.py
 data/source/dat/
 data/source/csv/
 data/packed/
-data/progress/
+
+# Progress - keep JSON files for sync across machines
+# Only ignore backup files
+data/progress/*_backup_*
+data/progress/*.bak
 
 # Translated files - keep CSVs for GitHub editing
 data/translated/*.dat
 data/translated/packed*/
 data/translated/game_ready*
+
+# Ignore backup files
+data/translated/*backup*
+data/translated/*.bak
 
 # Keep translation CSVs in git
 !data/translated/*.csv

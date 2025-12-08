@@ -1,0 +1,12 @@
+{
+  "total_entries": 365229,
+  "translated_entries": 313790,
+  "skipped_entries": 2978,
+  "error_entries": 52089,
+  "current_batch": 4514,
+  "total_batches": 9544,
+  "last_translated_id": "",
+  "started_at": "2025-12-06T16:59:11.966383",
+  "updated_at": "2025-12-07T23:37:15.371138",
+  "source_file_hash": "153665d02138f9e3b106ab5ae623f8d6"
+}
