@@ -1,12 +1,3 @@
-{
-  "total_entries": 365229,
-  "translated_entries": 313790,
-  "skipped_entries": 2978,
-  "error_entries": 52089,
-  "current_batch": 4514,
-  "total_batches": 9544,
-  "last_translated_id": "",
-  "started_at": "2025-12-06T16:59:11.966383",
-  "updated_at": "2025-12-07T23:37:15.371138",
-  "source_file_hash": "153665d02138f9e3b106ab5ae623f8d6"
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:11123efb4d69c8008dab975ff13479b0540fd43e8a6b33ca9749349bc0041f95
+size 353
