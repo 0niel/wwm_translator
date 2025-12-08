@@ -202,6 +202,18 @@ def translate(ctx: click.Context, resume: bool, batch_size: int | None, verbose:
                 safe_msg = msg.encode("ascii", errors="replace").decode("ascii")
                 print(safe_msg, flush=True)
 
+        def confirm_reset(msg: str) -> bool:
+            """Ask user whether to reset progress when source file changed."""
+            console.print()
+            print_warning("Source file has changed!")
+            console.print(f"[yellow]{msg}[/yellow]")
+            console.print()
+            console.print("[cyan]Options:[/cyan]")
+            console.print("  [green]y[/green] - Yes, reset and start fresh")
+            console.print("  [red]n[/red] - No, keep progress (update hash only)")
+            console.print()
+            return confirm("Reset progress?", default=False)
+
         processor = BatchProcessor(
             config=config,
             env_config=env_config,
@@ -209,6 +221,7 @@ def translate(ctx: click.Context, resume: bool, batch_size: int | None, verbose:
             prompt_builder=prompt_builder,
             progress_callback=on_progress,
             log_callback=log_output,
+            confirm_callback=confirm_reset,
             verbose=verbose,
         )
 

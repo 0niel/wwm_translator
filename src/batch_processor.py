@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[TranslationProgress], None]
 LogCallback = Callable[[str], None]
+ConfirmCallback = Callable[[str], bool]  # Returns True to proceed, False to abort
 
 
 @dataclass
@@ -118,8 +119,18 @@ class ProgressTracker:
     def translations_file(self) -> Path:
         return self.progress_dir / f"{self.source_file.stem}_translations.json"
 
-    def load(self) -> TranslationProgress | None:
-        """Load progress from disk (sync)."""
+    def load(
+        self, 
+        confirm_reset: ConfirmCallback | None = None
+    ) -> TranslationProgress | None:
+        """
+        Load progress from disk (sync).
+        
+        Args:
+            confirm_reset: Callback to ask user if they want to reset.
+                           If None, defaults to resetting on hash mismatch.
+                           If returns False, keeps existing progress with updated hash.
+        """
         if not self.progress_file.exists():
             logger.info("No previous progress found")
             return None
@@ -130,8 +141,27 @@ class ProgressTracker:
 
             current_hash = self._file_hash(self.source_file)
             if self._progress.source_file_hash != current_hash:
-                logger.warning("Source file changed, resetting progress")
-                return None
+                logger.warning("Source file hash changed!")
+                logger.info(f"  Old hash: {self._progress.source_file_hash}")
+                logger.info(f"  New hash: {current_hash}")
+                
+                # Ask user what to do
+                should_reset = True
+                if confirm_reset is not None:
+                    msg = (
+                        f"Source file changed! Progress: {self._progress.translated_entries:,} translations.\n"
+                        f"Reset progress and start fresh?"
+                    )
+                    should_reset = confirm_reset(msg)
+                
+                if should_reset:
+                    logger.warning("Resetting progress (user confirmed or default)")
+                    return None
+                else:
+                    # User chose to keep progress - update hash to current
+                    logger.info("Keeping progress, updating hash to current file")
+                    self._progress.source_file_hash = current_hash
+                    self._dirty = True  # Mark for saving
 
             if self.translations_file.exists():
                 self._translations = json.loads(self.translations_file.read_text(encoding="utf-8"))
@@ -264,6 +294,7 @@ class BatchProcessor:
         prompt_builder: PromptBuilder | None = None,
         progress_callback: ProgressCallback | None = None,
         log_callback: LogCallback | None = None,
+        confirm_callback: ConfirmCallback | None = None,
         verbose: bool = False,
     ):
         self._config = config or get_config()
@@ -272,6 +303,7 @@ class BatchProcessor:
         self._prompt_builder = prompt_builder
         self._on_progress = progress_callback
         self._log = log_callback or (lambda msg: print(msg))  # Direct print for visibility
+        self._confirm = confirm_callback
         self._verbose = verbose
         self._shutdown_requested = False
         self._semaphore: asyncio.Semaphore | None = None
@@ -330,7 +362,7 @@ class BatchProcessor:
 
         progress: TranslationProgress | None = None
         if resume:
-            progress = tracker.load()
+            progress = tracker.load(confirm_reset=self._confirm)
             if progress:
                 restored = 0
                 for entry in entries:

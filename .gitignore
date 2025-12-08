@@ -59,8 +59,12 @@ test.py
 
 # Data directories (large files)
 data/source/dat/
-data/source/csv/
 data/packed/
+
+# Keep extracted CSVs for sync (needed for translation)
+# Only ignore backup files in source/csv
+data/source/csv/*backup*
+data/source/csv/*.bak
 
 # Progress - keep JSON files for sync across machines
 # Only ignore backup files
