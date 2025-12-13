@@ -152,6 +152,18 @@ class AppConfig(BaseModel):
         """Get path to translated CSV."""
         return self.paths.translated_dir / f"{self.languages.target}.csv"
 
+    def get_source_diff_csv(self) -> Path:
+        """Get path to source language diff CSV."""
+        return self.paths.source_dir / "csv" / f"{self.languages.source}_diff.csv"
+
+    def get_original_diff_csv(self) -> Path:
+        """Get path to original language diff CSV."""
+        return self.paths.source_dir / "csv" / f"{self.languages.original}_diff.csv"
+
+    def get_output_diff_csv(self) -> Path:
+        """Get path to translated diff CSV."""
+        return self.paths.translated_dir / f"{self.languages.target}_diff.csv"
+
 
 class EnvConfig(BaseSettings):
     """Environment variables for API keys, model, and pricing."""

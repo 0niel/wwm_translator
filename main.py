@@ -134,8 +134,10 @@ def extract(ctx: click.Context, language: str | None, all_langs: bool) -> None:
 @click.option("--resume/--no-resume", default=True, help="Resume previous translation")
 @click.option("--batch-size", "-b", type=int, help="Override batch size")
 @click.option("--verbose", "-V", is_flag=True, help="Show detailed batch info")
+@click.option("--with-diff", "-d", is_flag=True, help="Also translate diff file")
+@click.option("--diff-only", is_flag=True, help="Only translate diff file")
 @click.pass_context
-def translate(ctx: click.Context, resume: bool, batch_size: int | None, verbose: bool) -> None:
+def translate(ctx: click.Context, resume: bool, batch_size: int | None, verbose: bool, with_diff: bool, diff_only: bool) -> None:
     """Translate extracted texts using LLM"""
     print_banner()
 
@@ -148,26 +150,54 @@ def translate(ctx: click.Context, resume: bool, batch_size: int | None, verbose:
     if batch_size:
         config.batch.size = batch_size
 
-    # Check files
-    source_csv = config.get_source_csv()
-    original_csv = config.get_original_csv()
-    output_csv = config.get_output_csv()
+    files_to_translate = []
 
-    if not source_csv.exists():
-        print_error(f"Source file not found: {source_csv}")
-        console.print("Run 'extract' command first")
+    if not diff_only:
+        source_csv = config.get_source_csv()
+        original_csv = config.get_original_csv()
+        output_csv = config.get_output_csv()
+        
+        if not source_csv.exists():
+            print_error(f"Source file not found: {source_csv}")
+            console.print("Run 'extract' command first")
+            return
+        
+        files_to_translate.append({
+            "name": "main",
+            "source": source_csv,
+            "original": original_csv,
+            "output": output_csv,
+        })
+
+    if with_diff or diff_only:
+        diff_source = config.get_source_diff_csv()
+        diff_original = config.get_original_diff_csv()
+        diff_output = config.get_output_diff_csv()
+        
+        if not diff_source.exists():
+            if diff_only:
+                print_error(f"Diff source file not found: {diff_source}")
+                console.print("Run 'extract-diff' command first")
+                return
+            else:
+                print_warning(f"Diff file not found: {diff_source}, skipping")
+        else:
+            files_to_translate.append({
+                "name": "diff",
+                "source": diff_source,
+                "original": diff_original,
+                "output": diff_output,
+            })
+
+    if not files_to_translate:
+        print_error("No files to translate")
         return
 
-    # Show config
     table = Table(title="Translation Configuration")
     table.add_column("Parameter", style="cyan")
     table.add_column("Value", style="green")
 
-    table.add_row("Source", f"{config.languages.source} ({source_csv.name})")
-    table.add_row(
-        "Context",
-        f"{config.languages.original} ({original_csv.name if original_csv.exists() else 'N/A'})",
-    )
+    table.add_row("Files to translate", ", ".join(f["name"] for f in files_to_translate))
     table.add_row("Target", config.languages.target)
     table.add_row("LLM", f"{config.llm.provider}/{config.llm.model}")
     table.add_row("Batch size", str(config.batch.size))
@@ -176,14 +206,12 @@ def translate(ctx: click.Context, resume: bool, batch_size: int | None, verbose:
     console.print(table)
     console.print()
 
-    # Check API key
     api_key = env_config.get_api_key(config.llm.provider)
     if not api_key:
         print_error(f"API key not set for {config.llm.provider}")
         console.print("Set it in .env file")
         return
 
-    # Initialize
     console.print("[bold]Initializing...[/bold]")
 
     try:
@@ -194,16 +222,13 @@ def translate(ctx: click.Context, resume: bool, batch_size: int | None, verbose:
             pass
 
         def log_output(msg: str):
-            # Use print for immediate output, handle encoding errors
             try:
                 print(msg, flush=True)
             except UnicodeEncodeError:
-                # Replace non-ASCII chars for Windows console
                 safe_msg = msg.encode("ascii", errors="replace").decode("ascii")
                 print(safe_msg, flush=True)
 
         def confirm_reset(msg: str) -> bool:
-            """Ask user whether to reset progress when source file changed."""
             console.print()
             print_warning("Source file has changed!")
             console.print(f"[yellow]{msg}[/yellow]")
@@ -228,32 +253,34 @@ def translate(ctx: click.Context, resume: bool, batch_size: int | None, verbose:
         print_success("Components ready")
         console.print()
 
-        # Run
-        console.print("[bold cyan]Starting translation...[/bold cyan]")
-        console.print()
+        for file_info in files_to_translate:
+            console.print(f"[bold cyan]Translating {file_info['name']}...[/bold cyan]")
+            console.print(f"  Source: {file_info['source'].name}")
+            console.print(f"  Output: {file_info['output'].name}")
+            console.print()
 
-        progress = processor.process_sync(
-            source_csv=source_csv,
-            original_csv=original_csv,
-            output_csv=output_csv,
-            resume=resume,
-        )
+            progress = processor.process_sync(
+                source_csv=file_info["source"],
+                original_csv=file_info["original"],
+                output_csv=file_info["output"],
+                resume=resume,
+            )
 
-        # Results
-        console.print()
-        result_table = Table(title="Results")
-        result_table.add_column("Metric", style="cyan")
-        result_table.add_column("Value", style="green")
+            console.print()
+            result_table = Table(title=f"Results ({file_info['name']})")
+            result_table.add_column("Metric", style="cyan")
+            result_table.add_column("Value", style="green")
 
-        result_table.add_row("Total", str(progress.total_entries))
-        result_table.add_row("Translated", str(progress.translated_entries))
-        result_table.add_row("Skipped", str(progress.skipped_entries))
-        result_table.add_row("Errors", str(progress.error_entries))
-        result_table.add_row("Progress", f"{progress.progress_percent:.1f}%")
+            result_table.add_row("Total", str(progress.total_entries))
+            result_table.add_row("Translated", str(progress.translated_entries))
+            result_table.add_row("Skipped", str(progress.skipped_entries))
+            result_table.add_row("Errors", str(progress.error_entries))
+            result_table.add_row("Progress", f"{progress.progress_percent:.1f}%")
 
-        console.print(result_table)
-        console.print()
-        print_success(f"Results saved to: {output_csv}")
+            console.print(result_table)
+            console.print()
+            print_success(f"Results saved to: {file_info['output']}")
+            console.print()
 
     except Exception as e:
         print_error(str(e))
@@ -479,31 +506,43 @@ def autopatch(ctx: click.Context, install: bool, with_diff: bool) -> None:
     # Patch main file
     main_output = patch_dat_files(source_dat_dir, patch_lang)
 
-    # Patch diff file if requested
     diff_output = None
     if with_diff:
         diff_dat_dir = config.paths.source_dir / "dat" / f"{source_lang}_diff"
         if diff_dat_dir.exists():
-            # Load English texts from diff CSV for fallback
-            diff_source_csv = config.paths.source_dir / "csv" / f"{source_lang}_diff.csv"
+            diff_source_csv = config.get_source_diff_csv()
+            diff_translated_csv = config.get_output_diff_csv()
+            
+            diff_translated_count = 0
+            diff_english_count = 0
+            
+            if diff_translated_csv.exists():
+                console.print("[bold]Loading diff translations...[/bold]")
+                with open(diff_translated_csv, encoding="utf-8", newline="") as f:
+                    reader = csv.DictReader(f, delimiter=";")
+                    for row in reader:
+                        text_id = row["ID"]
+                        if row.get("Status") == "translated" and row.get("Russian"):
+                            text = row["Russian"].replace("\\n", "\n").replace("\\r", "\r")
+                            translations[text_id] = text
+                            diff_translated_count += 1
+                console.print(f"  Loaded {diff_translated_count:,} diff translations")
+            
             if diff_source_csv.exists():
-                console.print("[bold]Loading diff source texts...[/bold]")
+                console.print("[bold]Loading diff English fallbacks...[/bold]")
                 with open(diff_source_csv, encoding="utf-8", newline="") as f:
                     reader = csv.DictReader(f, delimiter=";")
-                    diff_english_count = 0
                     for row in reader:
                         if row.get("OriginalText"):
                             text = row["OriginalText"].replace("\\n", "\n").replace("\\r", "\r")
                             text_id = row["ID"]
-                            # Add to english_texts if not already present
                             if text_id not in english_texts:
                                 english_texts[text_id] = text
-                                diff_english_count += 1
-                            # Also add to translations if not translated
                             if text_id not in translations:
                                 translations[text_id] = text
-                    console.print(f"  Loaded {diff_english_count:,} diff English texts")
-                console.print()
+                                diff_english_count += 1
+                console.print(f"  Using {diff_english_count:,} English fallbacks for untranslated diff strings")
+            console.print()
             
             diff_output = patch_dat_files(diff_dat_dir, f"{patch_lang}_diff")
         else:
@@ -566,48 +605,64 @@ def extract_diff(ctx: click.Context) -> None:
     console.print("[yellow]*[/yellow] = diff file (updates/patches)")
     console.print()
 
-    # Extract source language diff
     source_lang = config.languages.source
-    diff_file = game_locale_dir / f"translate_words_map_{source_lang}_diff"
-    
-    if not diff_file.exists():
-        print_warning(f"No diff file found: {diff_file.name}")
-        return
-
-    console.print(f"[bold]Extracting: {diff_file.name}...[/bold]")
-    
-    output_dir = config.paths.source_dir / "dat" / f"{source_lang}_diff"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
+    original_lang = config.languages.original
     extractor = BinaryExtractor(log_callback=lambda msg: logger.debug(msg))
-    result = extractor.extract(diff_file, output_dir)
-
-    if not result.success:
-        print_error(f"Extraction failed: {result.message}")
-        return
-
-    print_success(f"Extracted {result.files_extracted} .dat files")
-
-    # Extract texts
     text_extractor = TextExtractor()
-    csv_file = config.paths.source_dir / "csv" / f"{source_lang}_diff.csv"
-    text_result = text_extractor.extract(output_dir, csv_file)
-    
-    if text_result.success:
-        print_success(f"Extracted {text_result.texts_extracted:,} texts to {csv_file.name}")
+
+    langs_to_extract = [
+        (source_lang, f"translate_words_map_{source_lang}_diff"),
+        (original_lang, f"translate_words_map_{original_lang}_diff"),
+    ]
+
+    for lang, diff_name in langs_to_extract:
+        diff_file = game_locale_dir / diff_name
+        
+        if not diff_file.exists():
+            if lang == source_lang:
+                print_warning(f"No diff file found: {diff_name}")
+                return
+            else:
+                print_warning(f"No {lang} diff file: {diff_name} (context will be limited)")
+                continue
+
+        console.print(f"[bold]Extracting: {diff_name}...[/bold]")
+        
+        output_dir = config.paths.source_dir / "dat" / f"{lang}_diff"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        result = extractor.extract(diff_file, output_dir)
+
+        if not result.success:
+            print_error(f"Extraction failed: {result.message}")
+            if lang == source_lang:
+                return
+            continue
+
+        print_success(f"  Extracted {result.files_extracted} .dat files")
+
+        csv_file = config.paths.source_dir / "csv" / f"{lang}_diff.csv"
+        text_result = text_extractor.extract(output_dir, csv_file)
+        
+        if text_result.success:
+            print_success(f"  Extracted {text_result.texts_extracted:,} texts to {csv_file.name}")
+        else:
+            print_warning(f"  No translatable texts in {lang} diff")
+        
         console.print()
-        console.print("[bold]Next steps:[/bold]")
-        console.print("  1. Translate diff texts (they will be included automatically)")
-        console.print("  2. Run: python main.py autopatch --install --with-diff")
-    else:
-        print_warning(f"No translatable texts in diff")
+
+    console.print("[bold]Next steps:[/bold]")
+    console.print("  1. Run: python main.py translate --with-diff")
+    console.print("  2. Run: python main.py autopatch --install --with-diff")
 
 
 @cli.command()
 @click.option("--fix", "-f", is_flag=True, help="Mark invalid translations for re-translation")
 @click.option("--check-broken/--no-check-broken", default=True, help="Also check for broken/corrupted strings")
+@click.option("--with-diff", "-d", is_flag=True, help="Also validate diff file")
+@click.option("--diff-only", is_flag=True, help="Only validate diff file")
 @click.pass_context
-def validate(ctx: click.Context, fix: bool, check_broken: bool) -> None:
+def validate(ctx: click.Context, fix: bool, check_broken: bool, with_diff: bool, diff_only: bool) -> None:
     """Validate translations - check symbols, broken strings, and other issues"""
     import csv
     import re
@@ -617,19 +672,86 @@ def validate(ctx: click.Context, fix: bool, check_broken: bool) -> None:
     print_banner()
     config: AppConfig = ctx.obj["config"]
 
-    source_csv = config.get_source_csv()
-    translated_csv = config.get_output_csv()
+    files_to_validate = []
 
-    if not source_csv.exists():
-        print_error(f"Source CSV not found: {source_csv}")
+    if not diff_only:
+        source_csv = config.get_source_csv()
+        translated_csv = config.get_output_csv()
+        
+        if source_csv.exists() and translated_csv.exists():
+            files_to_validate.append({
+                "name": "main",
+                "source": source_csv,
+                "translated": translated_csv,
+                "issues_file": config.paths.translated_dir / "validation_issues.csv",
+            })
+        elif not source_csv.exists():
+            print_error(f"Source CSV not found: {source_csv}")
+            if not with_diff and not diff_only:
+                return
+        elif not translated_csv.exists():
+            print_error(f"Translations not found: {translated_csv}")
+            if not with_diff and not diff_only:
+                return
+
+    if with_diff or diff_only:
+        diff_source = config.get_source_diff_csv()
+        diff_translated = config.get_output_diff_csv()
+        
+        if diff_source.exists() and diff_translated.exists():
+            files_to_validate.append({
+                "name": "diff",
+                "source": diff_source,
+                "translated": diff_translated,
+                "issues_file": config.paths.translated_dir / "validation_issues_diff.csv",
+            })
+        elif diff_only:
+            if not diff_source.exists():
+                print_error(f"Diff source not found: {diff_source}")
+            if not diff_translated.exists():
+                print_error(f"Diff translations not found: {diff_translated}")
+            return
+        else:
+            if not diff_source.exists():
+                print_warning(f"Diff source not found: {diff_source}, skipping")
+            elif not diff_translated.exists():
+                print_warning(f"Diff translations not found: {diff_translated}, skipping")
+
+    if not files_to_validate:
+        print_error("No files to validate")
         return
 
-    if not translated_csv.exists():
-        print_error(f"Translations not found: {translated_csv}")
-        return
+    for file_info in files_to_validate:
+        console.print(f"[bold]Validating {file_info['name']}...[/bold]")
+        console.print(f"  Source: {file_info['source'].name}")
+        console.print(f"  Translated: {file_info['translated'].name}")
+        console.print()
+        
+        _validate_single_file(
+            file_info["source"],
+            file_info["translated"],
+            file_info["issues_file"],
+            fix=fix,
+            check_broken=check_broken,
+            config=config,
+        )
+        console.print()
 
-    console.print("[bold]Validating translations...[/bold]")
-    console.print()
+
+def _validate_single_file(
+    source_csv: Path,
+    translated_csv: Path,
+    issues_file: Path,
+    *,
+    fix: bool,
+    check_broken: bool,
+    config: AppConfig,
+) -> None:
+    """Validate a single translation file."""
+    import csv
+    import re
+
+    from src.issue_fixer import BrokenStringDetector
 
     # Universal pattern to find any special sequences
     special_pattern = re.compile(
@@ -771,8 +893,6 @@ def validate(ctx: click.Context, fix: bool, check_broken: bool) -> None:
         console.print()
 
     if all_issues:
-        # Save issues to file
-        issues_file = config.paths.translated_dir / "validation_issues.csv"
         with open(issues_file, "w", encoding="utf-8", newline="") as f:
             writer = csv.writer(f, delimiter=";")
             writer.writerow(["ID", "Type", "Mismatches", "Original", "Translated"])
@@ -867,9 +987,11 @@ def validate(ctx: click.Context, fix: bool, check_broken: bool) -> None:
 @cli.command("fix-issues")
 @click.option("--batch-size", "-b", type=int, default=5, help="Issues per LLM batch")
 @click.option("--limit", "-l", type=int, help="Limit number of issues to process")
-@click.option("--dry-run", "-d", is_flag=True, help="Show what would be fixed without applying")
+@click.option("--dry-run", is_flag=True, help="Show what would be fixed without applying")
+@click.option("--with-diff", "-d", is_flag=True, help="Also fix diff file issues")
+@click.option("--diff-only", is_flag=True, help="Only fix diff file issues")
 @click.pass_context
-def fix_issues(ctx: click.Context, batch_size: int, limit: int | None, dry_run: bool) -> None:
+def fix_issues(ctx: click.Context, batch_size: int, limit: int | None, dry_run: bool, with_diff: bool, diff_only: bool) -> None:
     """Fix validation issues using LLM"""
     print_banner()
 
@@ -879,21 +1001,44 @@ def fix_issues(ctx: click.Context, batch_size: int, limit: int | None, dry_run: 
     config: AppConfig = ctx.obj["config"]
     env_config: EnvConfig = ctx.obj["env"]
 
-    issues_file = config.paths.translated_dir / "validation_issues.csv"
-    translated_csv = config.get_output_csv()
+    files_to_fix = []
 
-    if not issues_file.exists():
-        print_error(f"Issues file not found: {issues_file}")
-        console.print("Run 'validate' command first")
+    if not diff_only:
+        issues_file = config.paths.translated_dir / "validation_issues.csv"
+        translated_csv = config.get_output_csv()
+        
+        if issues_file.exists() and translated_csv.exists():
+            files_to_fix.append({
+                "name": "main",
+                "issues_file": issues_file,
+                "translated_csv": translated_csv,
+            })
+        elif not issues_file.exists():
+            if not with_diff and not diff_only:
+                print_error(f"Issues file not found: {issues_file}")
+                console.print("Run 'validate' command first")
+                return
+
+    if with_diff or diff_only:
+        diff_issues_file = config.paths.translated_dir / "validation_issues_diff.csv"
+        diff_translated_csv = config.get_output_diff_csv()
+        
+        if diff_issues_file.exists() and diff_translated_csv.exists():
+            files_to_fix.append({
+                "name": "diff",
+                "issues_file": diff_issues_file,
+                "translated_csv": diff_translated_csv,
+            })
+        elif diff_only:
+            if not diff_issues_file.exists():
+                print_error(f"Diff issues file not found: {diff_issues_file}")
+                console.print("Run 'validate --with-diff' command first")
+            return
+
+    if not files_to_fix:
+        print_error("No files to fix")
         return
 
-    if not translated_csv.exists():
-        print_error(f"Translations not found: {translated_csv}")
-        return
-
-    # Load issues
-    console.print("[bold]Loading validation issues...[/bold]")
-    
     try:
         llm_client = LLMClient(config.llm, env_config)
         fixer = IssueFixer(
@@ -901,63 +1046,66 @@ def fix_issues(ctx: click.Context, batch_size: int, limit: int | None, dry_run: 
             batch_size=batch_size,
             log_callback=lambda msg: console.print(msg),
         )
-        
-        issues = fixer.load_issues(issues_file)
-        console.print(f"  Found {len(issues):,} issues")
-        
-        if limit:
-            issues = issues[:limit]
-            console.print(f"  Processing first {limit}")
-        
-        console.print()
-        
-        # Analyze issue types
-        by_type: dict[str, int] = {}
-        for issue in issues:
-            t = issue.issue_type
-            by_type[t] = by_type.get(t, 0) + 1
-        
-        console.print("[bold]Issue breakdown:[/bold]")
-        type_names = {
-            "numbered_brackets": "Numbered brackets [1], [2]... (auto-fix)",
-            "newline_mismatch": "Newline \\n mismatches",
-            "tag_translated": "Game tags translated",
-            "placeholder_translated": "Placeholder brackets translated",
-            "other": "Other issues",
-        }
-        for t, count in sorted(by_type.items(), key=lambda x: -x[1]):
-            console.print(f"  {type_names.get(t, t)}: {count:,}")
-        console.print()
-        
-        # Fix issues
-        console.print("[bold cyan]Fixing issues...[/bold cyan]")
-        console.print()
-        
-        fixes = fixer.fix_issues(issues)
-        
-        console.print()
-        console.print(f"[bold]Total fixes: {len(fixes):,}[/bold]")
-        
-        if not fixes:
-            print_warning("No fixes to apply")
-            return
-        
-        if dry_run:
+
+        for file_info in files_to_fix:
+            console.print(f"[bold]Processing {file_info['name']}...[/bold]")
+            console.print(f"  Issues file: {file_info['issues_file'].name}")
+            console.print(f"  Translated: {file_info['translated_csv'].name}")
+            
+            issues = fixer.load_issues(file_info["issues_file"])
+            console.print(f"  Found {len(issues):,} issues")
+            
+            if limit:
+                issues = issues[:limit]
+                console.print(f"  Processing first {limit}")
+            
             console.print()
-            console.print("[yellow]DRY RUN - not applying changes[/yellow]")
+            
+            by_type: dict[str, int] = {}
+            for issue in issues:
+                t = issue.issue_type
+                by_type[t] = by_type.get(t, 0) + 1
+            
+            console.print("[bold]Issue breakdown:[/bold]")
+            type_names = {
+                "numbered_brackets": "Numbered brackets [1], [2]... (auto-fix)",
+                "newline_mismatch": "Newline \\n mismatches",
+                "tag_translated": "Game tags translated",
+                "placeholder_translated": "Placeholder brackets translated",
+                "other": "Other issues",
+            }
+            for t, count in sorted(by_type.items(), key=lambda x: -x[1]):
+                console.print(f"  {type_names.get(t, t)}: {count:,}")
             console.print()
-            console.print("[bold]Sample fixes:[/bold]")
-            for id_, fixed in list(fixes.items())[:5]:
-                console.print(f"  {id_}: {fixed[:80]}...")
-            return
-        
-        # Apply fixes
-        console.print()
-        console.print("[bold]Applying fixes...[/bold]")
-        updated = fixer.apply_fixes(fixes, translated_csv)
-        
-        print_success(f"Updated {updated:,} translations in {translated_csv.name}")
-        console.print()
+            
+            console.print("[bold cyan]Fixing issues...[/bold cyan]")
+            console.print()
+            
+            fixes = fixer.fix_issues(issues)
+            
+            console.print()
+            console.print(f"[bold]Total fixes: {len(fixes):,}[/bold]")
+            
+            if not fixes:
+                print_warning("No fixes to apply")
+                continue
+            
+            if dry_run:
+                console.print()
+                console.print("[yellow]DRY RUN - not applying changes[/yellow]")
+                console.print()
+                console.print("[bold]Sample fixes:[/bold]")
+                for id_, fixed in list(fixes.items())[:5]:
+                    console.print(f"  {id_}: {fixed[:80]}...")
+                continue
+            
+            console.print()
+            console.print("[bold]Applying fixes...[/bold]")
+            updated = fixer.apply_fixes(fixes, file_info["translated_csv"])
+            
+            print_success(f"Updated {updated:,} translations in {file_info['translated_csv'].name}")
+            console.print()
+
         console.print("[bold]Next steps:[/bold]")
         console.print("  1. Run 'validate' again to check remaining issues")
         console.print("  2. Repeat 'fix-issues' if needed")
