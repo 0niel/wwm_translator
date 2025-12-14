@@ -75,26 +75,61 @@
 
     <section id="stats" class="py-16 px-6">
         <div class="max-w-7xl mx-auto">
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <h2 class="text-xl font-bold mb-6 text-center">Общая статистика</h2>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                 <div class="bg-surface rounded-xl p-6 col-span-2 md:col-span-1">
-                    <p class="text-4xl font-bold text-accent mb-1" id="total-progress">92.2%</p>
+                    <p class="text-4xl font-bold text-accent mb-1" id="total-progress">—%</p>
                     <p class="text-muted text-sm">Прогресс</p>
                 </div>
                 <div class="bg-surface rounded-xl p-6">
-                    <p class="text-2xl font-bold mb-1" id="translated-count">336,848</p>
+                    <p class="text-2xl font-bold text-green-400 mb-1" id="translated-count">—</p>
                     <p class="text-muted text-sm">Переведено</p>
                 </div>
                 <div class="bg-surface rounded-xl p-6">
-                    <p class="text-2xl font-bold text-orange-400 mb-1" id="stat-pending">0</p>
-                    <p class="text-muted text-sm">Не переведено</p>
+                    <p class="text-2xl font-bold text-orange-400 mb-1" id="stat-pending">—</p>
+                    <p class="text-muted text-sm">Ожидает перевода</p>
                 </div>
                 <div class="bg-surface rounded-xl p-6">
-                    <p class="text-2xl font-bold text-yellow-400 mb-1" id="stat-issues">10,746</p>
-                    <p class="text-muted text-sm">Требует правок</p>
+                    <p class="text-2xl font-bold text-yellow-400 mb-1" id="stat-issues">—</p>
+                    <p class="text-muted text-sm">Требует исправлений</p>
                 </div>
                 <div class="bg-surface rounded-xl p-6">
-                    <p class="text-2xl font-bold mb-1" id="total-count">365,229</p>
+                    <p class="text-2xl font-bold mb-1" id="total-count">—</p>
                     <p class="text-muted text-sm">Всего строк</p>
+                </div>
+            </div>
+
+            <div id="detailed-stats" class="hidden">
+                <h3 class="text-lg font-semibold mb-4 text-center text-muted">Детализация по файлам</h3>
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div class="bg-surface rounded-xl p-5">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-medium">Основной файл</span>
+                            <span class="text-accent font-bold" id="main-progress">—%</span>
+                        </div>
+                        <div class="w-full bg-border rounded-full h-2 mb-3">
+                            <div class="bg-accent h-2 rounded-full transition-all" id="main-bar" style="width: 0%"></div>
+                        </div>
+                        <div class="flex justify-between text-xs text-muted">
+                            <span><span class="text-green-400" id="main-translated">—</span> переведено</span>
+                            <span><span class="text-orange-400" id="main-pending">—</span> ожидает</span>
+                            <span><span id="main-total">—</span> всего</span>
+                        </div>
+                    </div>
+                    <div class="bg-surface rounded-xl p-5" id="diff-stats-block">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-medium">Патч обновлений</span>
+                            <span class="text-accent font-bold" id="diff-progress">—%</span>
+                        </div>
+                        <div class="w-full bg-border rounded-full h-2 mb-3">
+                            <div class="bg-accent h-2 rounded-full transition-all" id="diff-bar" style="width: 0%"></div>
+                        </div>
+                        <div class="flex justify-between text-xs text-muted">
+                            <span><span class="text-green-400" id="diff-translated">—</span> переведено</span>
+                            <span><span class="text-orange-400" id="diff-pending">—</span> ожидает</span>
+                            <span><span id="diff-total">—</span> всего</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -105,9 +140,9 @@
             <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
                 <div>
                     <h2 class="text-2xl font-bold mb-1">Таблица переводов</h2>
-                    <p class="text-muted text-sm">Все строки из ru.csv</p>
+                    <p class="text-muted text-sm">Все строки из основного файла и патча обновлений</p>
                 </div>
-                <div class="flex items-center gap-3 w-full md:w-auto">
+                <div class="flex items-center gap-3 w-full md:w-auto flex-wrap">
                     <div class="relative flex-1 md:w-80">
                         <input type="text" id="search-input" placeholder="Поиск по ID, EN или RU..."
                             class="w-full bg-surface text-white placeholder-muted px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/50">
@@ -116,10 +151,15 @@
                         </svg>
                     </div>
                     <select id="status-filter" class="bg-surface text-white px-3 py-2.5 rounded-lg text-sm focus:outline-none">
-                        <option value="all">Все</option>
-                        <option value="translated">Переведено</option>
-                        <option value="pending">Не переведено</option>
-                        <option value="needs_retranslation">Требует правок</option>
+                        <option value="all">Все статусы</option>
+                        <option value="translated">✓ Переведено</option>
+                        <option value="pending">○ Ожидает</option>
+                        <option value="issues">! Требует исправлений</option>
+                    </select>
+                    <select id="source-filter" class="bg-surface text-white px-3 py-2.5 rounded-lg text-sm focus:outline-none">
+                        <option value="all">Все файлы</option>
+                        <option value="main">Основной</option>
+                        <option value="diff">Патч</option>
                     </select>
                 </div>
             </div>
@@ -148,30 +188,44 @@
                     </div>
                 </div>
             </div>
-            <p class="text-muted text-xs mt-4">Кликните на строку для просмотра деталей и редактирования</p>
         </div>
     </section>
 
     <section id="download" class="py-16 px-6 bg-surface/50">
         <div class="max-w-4xl mx-auto">
-            <h2 class="text-2xl font-bold mb-8 text-center">Скачать перевод</h2>
-            <div class="grid md:grid-cols-2 gap-4">
-                <div class="bg-surface rounded-xl p-6">
-                    <h3 class="font-semibold mb-2">Основной перевод</h3>
-                    <p class="text-muted text-sm mb-4">translate_words_map_en</p>
+            <h2 class="text-2xl font-bold mb-2 text-center">Скачать перевод</h2>
+            <p class="text-muted text-sm text-center mb-8">Скачайте оба файла для полной локализации</p>
+            
+            <div class="grid md:grid-cols-2 gap-4 mb-6">
+                <div class="bg-surface rounded-xl p-6 border-2 border-accent">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="px-2 py-0.5 bg-accent/20 text-accent text-xs rounded font-medium">Обязательно</span>
+                    </div>
+                    <h3 class="font-semibold mb-1">Основной перевод</h3>
+                    <p class="text-muted text-sm mb-4">translate_words_map_en — базовый файл локализации</p>
                     <a href="https://github.com/0niel/wwm_translator/raw/main/data/translated/translate_words_map_en" 
                         class="block w-full bg-accent text-white font-medium py-2.5 rounded-lg text-center text-sm hover:bg-accent/90 transition-colors">
-                        Скачать
+                        Скачать основной файл
                     </a>
                 </div>
-                <div class="bg-surface rounded-xl p-6">
-                    <h3 class="font-semibold mb-2">Патч обновлений</h3>
-                    <p class="text-muted text-sm mb-4">translate_words_map_en_diff</p>
+                <div class="bg-surface rounded-xl p-6" id="diff-download-block">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded font-medium">Рекомендуется</span>
+                    </div>
+                    <h3 class="font-semibold mb-1">Патч обновлений</h3>
+                    <p class="text-muted text-sm mb-4">translate_words_map_en_diff — дополнительные строки из обновлений игры</p>
                     <a href="https://github.com/0niel/wwm_translator/raw/main/data/translated/translate_words_map_en_diff" 
                         class="block w-full bg-border text-white font-medium py-2.5 rounded-lg text-center text-sm hover:bg-muted/20 transition-colors">
-                        Скачать
+                        Скачать патч
                     </a>
                 </div>
+            </div>
+
+            <div class="bg-bg rounded-xl p-4 text-sm">
+                <p class="text-muted">
+                    <strong class="text-white">Примечание:</strong> Основной файл содержит большую часть перевода. 
+                    Патч обновлений содержит строки из последних обновлений игры — без него часть текста может быть на английском.
+                </p>
             </div>
         </div>
     </section>
@@ -183,20 +237,22 @@
                 <div class="bg-surface rounded-xl p-5 flex gap-4">
                     <span class="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center text-sm font-semibold flex-shrink-0">1</span>
                     <div>
-                        <p class="font-medium mb-1">Найдите папку локализации</p>
-                        <code class="text-xs text-muted">...\SteamLibrary/steamapps/common/Where Winds Meet/Package/HD/oversea/locale</code>
+                        <p class="font-medium mb-1">Найдите папку локализации игры</p>
+                        <code class="text-xs text-muted block mt-2 bg-bg px-3 py-2 rounded-lg">...\SteamLibrary\steamapps\common\Where Winds Meet\Package\HD\oversea\locale</code>
                     </div>
                 </div>
                 <div class="bg-surface rounded-xl p-5 flex gap-4">
                     <span class="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center text-sm font-semibold flex-shrink-0">2</span>
                     <div>
-                        <p class="font-medium mb-1">Скопируйте скачанные файлы в папку</p>
+                        <p class="font-medium mb-1">Скопируйте скачанные файлы в эту папку</p>
+                        <p class="text-muted text-sm mt-1">Перезаписывать существующие файлы не нужно — файлы имеют уникальные имена</p>
                     </div>
                 </div>
                 <div class="bg-surface rounded-xl p-5 flex gap-4">
                     <span class="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center text-sm font-semibold flex-shrink-0">3</span>
                     <div>
-                        <p class="font-medium mb-1">В настройках игры выберите <span class="text-accent">English (EN)</span></p>
+                        <p class="font-medium mb-1">В настройках игры выберите язык <span class="text-accent">English (EN)</span></p>
+                        <p class="text-muted text-sm mt-1">Русский перевод заменяет английскую локализацию</p>
                     </div>
                 </div>
             </div>
@@ -238,19 +294,42 @@
         let filtered = [];
         let page = 1;
         const perPage = 50;
+        let statsData = null;
 
         async function init() {
             try {
                 const statsRes = await fetch('data/stats.json');
                 if (statsRes.ok) {
-                    const s = await statsRes.json();
-                    document.getElementById('total-progress').textContent = s.progress + '%';
-                    document.getElementById('translated-count').textContent = s.translated.toLocaleString();
-                    document.getElementById('total-count').textContent = s.total.toLocaleString();
-                    document.getElementById('stat-pending').textContent = (s.pending || 0).toLocaleString();
-                    document.getElementById('stat-issues').textContent = (s.issues || 0).toLocaleString();
+                    statsData = await statsRes.json();
+                    
+                    document.getElementById('total-progress').textContent = statsData.progress + '%';
+                    document.getElementById('translated-count').textContent = statsData.translated.toLocaleString();
+                    document.getElementById('total-count').textContent = statsData.total.toLocaleString();
+                    document.getElementById('stat-pending').textContent = (statsData.pending || 0).toLocaleString();
+                    document.getElementById('stat-issues').textContent = (statsData.issues || 0).toLocaleString();
+
+                    if (statsData.main && statsData.diff) {
+                        document.getElementById('detailed-stats').classList.remove('hidden');
+                        
+                        document.getElementById('main-progress').textContent = statsData.main.progress + '%';
+                        document.getElementById('main-bar').style.width = statsData.main.progress + '%';
+                        document.getElementById('main-translated').textContent = statsData.main.translated.toLocaleString();
+                        document.getElementById('main-pending').textContent = (statsData.main.pending + statsData.main.issues).toLocaleString();
+                        document.getElementById('main-total').textContent = statsData.main.total.toLocaleString();
+
+                        if (statsData.has_diff && statsData.diff.total > 0) {
+                            document.getElementById('diff-progress').textContent = statsData.diff.progress + '%';
+                            document.getElementById('diff-bar').style.width = statsData.diff.progress + '%';
+                            document.getElementById('diff-translated').textContent = statsData.diff.translated.toLocaleString();
+                            document.getElementById('diff-pending').textContent = (statsData.diff.pending + statsData.diff.issues).toLocaleString();
+                            document.getElementById('diff-total').textContent = statsData.diff.total.toLocaleString();
+                        } else {
+                            document.getElementById('diff-stats-block').classList.add('hidden');
+                            document.getElementById('diff-download-block').classList.add('hidden');
+                        }
+                    }
                 }
-            } catch(e) {}
+            } catch(e) { console.error('Stats error:', e); }
 
             try {
                 const transRes = await fetch('data/translations.json');
@@ -267,6 +346,7 @@
         function filter() {
             const q = document.getElementById('search-input').value.toLowerCase();
             const status = document.getElementById('status-filter').value;
+            const source = document.getElementById('source-filter').value;
             
             filtered = allData.filter(t => {
                 const matchSearch = !q || q.length < 2 || 
@@ -275,8 +355,9 @@
                     (t.ru && t.ru.toLowerCase().includes(q));
                 
                 const matchStatus = status === 'all' || t.status === status;
+                const matchSource = source === 'all' || t.source === source;
                 
-                return matchSearch && matchStatus;
+                return matchSearch && matchStatus && matchSource;
             });
             
             page = 1;
@@ -297,21 +378,27 @@
             const start = (page - 1) * perPage;
             const items = filtered.slice(start, start + perPage);
 
-            tbody.innerHTML = items.map(t => `
+            const statusConfig = {
+                translated: { icon: '✓', color: 'text-green-400', label: 'Готово' },
+                pending: { icon: '○', color: 'text-orange-400', label: 'Ожидает' },
+                issues: { icon: '!', color: 'text-yellow-400', label: 'Исправить' }
+            };
+
+            tbody.innerHTML = items.map(t => {
+                const st = statusConfig[t.status] || statusConfig.pending;
+                const sourceTag = t.source === 'diff' ? '<span class="ml-1 text-[10px] text-purple-400">[P]</span>' : '';
+                return `
                 <tr class="hover:bg-border/50 cursor-pointer transition-colors" onclick="showDetail('${t.id}')">
-                    <td class="px-4 py-3"><code class="text-xs text-muted">${t.id.substring(0, 16)}</code></td>
+                    <td class="px-4 py-3"><code class="text-xs text-muted">${t.id.substring(0, 16)}</code>${sourceTag}</td>
                     <td class="px-4 py-3 text-muted max-w-xs truncate">${hl(truncate(t.en, 80), q)}</td>
                     <td class="px-4 py-3 max-w-xs truncate">${hl(truncate(t.ru, 80), q)}</td>
                     <td class="px-4 py-3">
-                        <span class="inline-flex items-center gap-1 text-xs ${
-                            t.status === 'translated' ? 'text-green-400' : 
-                            t.status === 'pending' ? 'text-muted' : 'text-yellow-400'
-                        }">
-                            ${t.status === 'translated' ? '✓' : t.status === 'pending' ? '○' : '!'}
+                        <span class="inline-flex items-center gap-1 text-xs ${st.color}" title="${st.label}">
+                            ${st.icon}
                         </span>
                     </td>
                 </tr>
-            `).join('');
+            `}).join('');
 
             updatePagination();
         }
@@ -348,6 +435,7 @@
 
         document.getElementById('search-input').addEventListener('input', debounce(filter, 300));
         document.getElementById('status-filter').addEventListener('change', filter);
+        document.getElementById('source-filter').addEventListener('change', filter);
         document.getElementById('prev-page').addEventListener('click', () => { if (page > 1) { page--; render(); } });
         document.getElementById('next-page').addEventListener('click', () => { 
             if (page < Math.ceil(filtered.length / perPage)) { page++; render(); }
@@ -364,15 +452,25 @@
         function showDetail(id) {
             const item = allData.find(t => t.id === id);
             if (!item) return;
+            
+            const sourceLabel = item.source === 'diff' ? ' <span class="text-purple-400">(из патча)</span>' : '';
+            const statusLabels = {
+                translated: '<span class="text-green-400">✓ Переведено</span>',
+                pending: '<span class="text-orange-400">○ Ожидает перевода</span>',
+                issues: '<span class="text-yellow-400">! Требует исправлений</span>'
+            };
+            
             document.getElementById('modal-content').innerHTML = `
                 <div class="space-y-4 text-sm">
-                    <div><p class="text-muted text-xs mb-1">ID</p><code class="text-accent">${item.id}</code></div>
-                    <div><p class="text-muted text-xs mb-1">English</p><div class="bg-bg rounded-lg p-3">${esc(item.en || '—')}</div></div>
-                    ${item.zh ? `<div><p class="text-muted text-xs mb-1">中文</p><div class="bg-bg rounded-lg p-3 text-muted">${esc(item.zh)}</div></div>` : ''}
-                    <div><p class="text-muted text-xs mb-1">Русский</p><div class="bg-bg rounded-lg p-3">${esc(item.ru || '—')}</div></div>
+                    <div><p class="text-muted text-xs mb-1">ID${sourceLabel}</p><code class="text-accent">${item.id}</code></div>
+                    <div><p class="text-muted text-xs mb-1">Статус</p>${statusLabels[item.status] || statusLabels.pending}</div>
+                    <div><p class="text-muted text-xs mb-1">English</p><div class="bg-bg rounded-lg p-3 whitespace-pre-wrap">${esc(item.en || '—')}</div></div>
+                    ${item.zh ? `<div><p class="text-muted text-xs mb-1">中文 (контекст)</p><div class="bg-bg rounded-lg p-3 text-muted whitespace-pre-wrap">${esc(item.zh)}</div></div>` : ''}
+                    <div><p class="text-muted text-xs mb-1">Русский</p><div class="bg-bg rounded-lg p-3 whitespace-pre-wrap">${esc(item.ru || '—')}</div></div>
                 </div>
             `;
-            document.getElementById('modal-edit-link').href = 'https://github.com/0niel/wwm_translator/blob/main/data/translated/ru.csv';
+            const csvFile = item.source === 'diff' ? 'ru_diff.csv' : 'ru.csv';
+            document.getElementById('modal-edit-link').href = `https://github.com/0niel/wwm_translator/blob/main/data/translated/${csvFile}`;
             document.getElementById('modal').classList.remove('hidden');
         }
 
@@ -385,4 +483,3 @@
     </script>
 </body>
 </html>
-

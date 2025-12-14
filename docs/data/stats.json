@@ -1,8 +1,33 @@
 {
-  "total": 365229,
-  "translated": 364479,
-  "skipped": 680,
-  "pending": 70,
-  "issues": 0,
-  "progress": 99.8
+  "combined": {
+    "total": 386008,
+    "translated": 384587,
+    "skipped": 1231,
+    "pending": 0,
+    "issues": 190,
+    "progress": 99.6
+  },
+  "main": {
+    "total": 365229,
+    "translated": 364479,
+    "skipped": 680,
+    "pending": 0,
+    "issues": 70,
+    "progress": 99.8
+  },
+  "diff": {
+    "total": 20779,
+    "translated": 20108,
+    "skipped": 551,
+    "pending": 0,
+    "issues": 120,
+    "progress": 96.8
+  },
+  "has_diff": true,
+  "progress": 99.6,
+  "total": 386008,
+  "translated": 384587,
+  "pending": 0,
+  "issues": 190,
+  "skipped": 1231
 }

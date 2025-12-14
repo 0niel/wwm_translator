@@ -1,3 +1,4 @@
 data/source/csv/*.csv filter=lfs diff=lfs merge=lfs -text
 data/progress/*.json filter=lfs diff=lfs merge=lfs -text
 data/translated/*.csv filter=lfs diff=lfs merge=lfs -text
+docs/data/translations.json filter=lfs diff=lfs merge=lfs -text
