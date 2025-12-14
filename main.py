@@ -1167,22 +1167,86 @@ def export_web(ctx: click.Context, limit: int | None) -> None:
 
     print_banner()
     config: AppConfig = ctx.obj["config"]
-
-    source_csv = config.get_source_csv()
-    original_csv = config.get_original_csv()
-    translated_csv = config.get_output_csv()
     docs_dir = Path("docs/data")
-
-    if not translated_csv.exists():
-        print_error(f"Translations not found: {translated_csv}")
-        return
-
     docs_dir.mkdir(parents=True, exist_ok=True)
 
     console.print("[bold]Exporting translations for web...[/bold]")
     console.print()
 
-    # Load source texts (English)
+    def count_file_stats(translated_csv: Path, source_csv: Path) -> dict:
+        stats = {"total": 0, "translated": 0, "skipped": 0, "pending": 0, "issues": 0}
+        if not translated_csv.exists():
+            return stats
+        
+        with open(translated_csv, encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f, delimiter=";")
+            for row in reader:
+                stats["total"] += 1
+                status = row.get("Status", "")
+                if status == "translated":
+                    stats["translated"] += 1
+                elif status == "skipped":
+                    stats["skipped"] += 1
+                elif status in ("needs_retranslation", "error"):
+                    stats["issues"] += 1
+                else:
+                    stats["pending"] += 1
+        return stats
+
+    main_csv = config.get_output_csv()
+    diff_csv = config.get_output_diff_csv()
+    
+    main_stats = count_file_stats(main_csv, config.get_source_csv())
+    diff_stats = count_file_stats(diff_csv, config.get_source_diff_csv())
+    
+    has_diff = diff_csv.exists() and diff_stats["total"] > 0
+
+    combined = {
+        "total": main_stats["total"] + diff_stats["total"],
+        "translated": main_stats["translated"] + diff_stats["translated"],
+        "skipped": main_stats["skipped"] + diff_stats["skipped"],
+        "pending": main_stats["pending"] + diff_stats["pending"],
+        "issues": main_stats["issues"] + diff_stats["issues"],
+    }
+    combined["progress"] = round(combined["translated"] / combined["total"] * 100, 1) if combined["total"] else 0
+
+    main_stats["progress"] = round(main_stats["translated"] / main_stats["total"] * 100, 1) if main_stats["total"] else 0
+    diff_stats["progress"] = round(diff_stats["translated"] / diff_stats["total"] * 100, 1) if diff_stats["total"] else 0
+
+    full_stats = {
+        "combined": combined,
+        "main": main_stats,
+        "diff": diff_stats,
+        "has_diff": has_diff,
+        "progress": combined["progress"],
+        "total": combined["total"],
+        "translated": combined["translated"],
+        "pending": combined["pending"],
+        "issues": combined["issues"],
+        "skipped": combined["skipped"],
+    }
+
+    stats_file = docs_dir / "stats.json"
+    with open(stats_file, "w", encoding="utf-8") as f:
+        json.dump(full_stats, f, ensure_ascii=False, indent=2)
+
+    console.print(f"[bold]Main file ({main_csv.name}):[/bold]")
+    console.print(f"  Total: {main_stats['total']:,}, Translated: {main_stats['translated']:,} ({main_stats['progress']}%)")
+    console.print(f"  Pending: {main_stats['pending']:,}, Issues: {main_stats['issues']:,}")
+    console.print()
+
+    if has_diff:
+        console.print(f"[bold]Diff file ({diff_csv.name}):[/bold]")
+        console.print(f"  Total: {diff_stats['total']:,}, Translated: {diff_stats['translated']:,} ({diff_stats['progress']}%)")
+        console.print(f"  Pending: {diff_stats['pending']:,}, Issues: {diff_stats['issues']:,}")
+        console.print()
+
+    console.print(f"[bold green]Combined: {combined['progress']}% ({combined['translated']:,}/{combined['total']:,})[/bold green]")
+    console.print()
+
+    source_csv = config.get_source_csv()
+    original_csv = config.get_original_csv()
+
     source_texts: dict[str, str] = {}
     if source_csv.exists():
         with open(source_csv, encoding="utf-8", newline="") as f:
@@ -1190,7 +1254,13 @@ def export_web(ctx: click.Context, limit: int | None) -> None:
             for row in reader:
                 source_texts[row["ID"]] = row["OriginalText"]
 
-    # Load original texts (Chinese)
+    diff_source_csv = config.get_source_diff_csv()
+    if diff_source_csv.exists():
+        with open(diff_source_csv, encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f, delimiter=";")
+            for row in reader:
+                source_texts[row["ID"]] = row["OriginalText"]
+
     original_texts: dict[str, str] = {}
     if original_csv.exists():
         with open(original_csv, encoding="utf-8", newline="") as f:
@@ -1198,38 +1268,34 @@ def export_web(ctx: click.Context, limit: int | None) -> None:
             for row in reader:
                 original_texts[row["ID"]] = row["OriginalText"]
 
-    # Load and export translations
     translations = []
-    stats = {
-        "total": 0,
-        "translated": 0,
-        "skipped": 0,
-        "pending": 0,
-        "issues": 0,
-    }
+    files_to_export = [main_csv]
+    if has_diff:
+        files_to_export.append(diff_csv)
 
-    with open(translated_csv, encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f, delimiter=";")
-        for row in reader:
-            stats["total"] += 1
-            
-            status = row.get("Status", "")
-            if status == "translated":
-                stats["translated"] += 1
-            elif status == "skipped":
-                stats["skipped"] += 1
-            elif status == "needs_retranslation":
-                stats["issues"] += 1
-            else:
-                stats["pending"] += 1
+    for csv_file in files_to_export:
+        if not csv_file.exists():
+            continue
+        with open(csv_file, encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f, delimiter=";")
+            for row in reader:
+                status = row.get("Status", "")
+                if status == "skipped":
+                    continue
+                
+                if status in ("needs_retranslation", "error"):
+                    display_status = "issues"
+                elif status == "translated":
+                    display_status = "translated"
+                else:
+                    display_status = "pending"
 
-            # Export all entries (translated, issues, pending)
-            if status != "skipped":
                 entry = {
                     "id": row["ID"],
                     "en": source_texts.get(row["ID"], row.get("English", "")),
                     "ru": row.get("Russian", ""),
-                    "status": status if status else "pending",
+                    "status": display_status,
+                    "source": "diff" if csv_file == diff_csv else "main",
                 }
                 if zh := original_texts.get(row["ID"]):
                     entry["zh"] = zh
@@ -1239,20 +1305,11 @@ def export_web(ctx: click.Context, limit: int | None) -> None:
                 if limit and len(translations) >= limit:
                     break
 
-    # Save translations JSON
     translations_file = docs_dir / "translations.json"
     with open(translations_file, "w", encoding="utf-8") as f:
         json.dump(translations, f, ensure_ascii=False, separators=(",", ":"))
 
-    console.print(f"  Exported {len(translations):,} translations")
-
-    # Save stats JSON
-    stats["progress"] = round(stats["translated"] / stats["total"] * 100, 1) if stats["total"] else 0
-    stats_file = docs_dir / "stats.json"
-    with open(stats_file, "w", encoding="utf-8") as f:
-        json.dump(stats, f, ensure_ascii=False, indent=2)
-
-    console.print(f"  Stats: {stats['progress']}% translated")
+    console.print(f"Exported {len(translations):,} translations")
     console.print()
 
     print_success(f"Exported to {docs_dir}/")
